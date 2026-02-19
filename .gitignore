@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.env
+
+# Recordings and logs (generated data)
+recordings/
+logs/
+screen_capture.png
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Gemini artifacts
+.gemini/
+
+# Android build artifacts
+SmartLoggerTestApp/app/build/
+SmartLoggerTestApp/build/
+SmartLoggerTestApp/.gradle/
+SmartLoggerTestApp/local.properties
+SmartLoggerTestApp/gradle/wrapper/gradle-wrapper.jar
+*.class
+*.apk
+*.aab

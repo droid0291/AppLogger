@@ -1,0 +1,5 @@
+google-generativeai
+python-dotenv
+colorama
+Pillow
+requests
