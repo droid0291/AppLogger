@@ -50,6 +50,12 @@ class SmartLoggerGUI:
         ttk.Separator(left_panel, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
         ttk.Label(left_panel, text="Bug Reporting", font=('', 10, 'bold')).pack(anchor=tk.W)
         
+        # App package selector
+        ttk.Label(left_panel, text="Target App").pack(anchor=tk.W, pady=(5,0))
+        self.package_combo = ttk.Combobox(left_panel)
+        self.package_combo.pack(fill=tk.X, pady=2)
+        ttk.Button(left_panel, text="🔄 Refresh Apps", command=self.refresh_packages).pack(fill=tk.X, pady=2)
+        
         self.record_button = ttk.Button(left_panel, text="▶ Start Recording", command=self.toggle_recording)
         self.record_button.pack(fill=tk.X, pady=2)
         
@@ -92,6 +98,36 @@ class SmartLoggerGUI:
             self.device_combo.current(0)
             self.on_device_select(None)
         self.status_var.set(f"Found {len(devices)} devices")
+
+    def refresh_packages(self):
+        """Fetch installed 3rd-party app packages from the device."""
+        def task():
+            self.status_var.set("Fetching installed apps...")
+            try:
+                import subprocess
+                cmd = [self.adb.adb_path]
+                if self.adb.device_serial:
+                    cmd += ["-s", self.adb.device_serial]
+                cmd += ["shell", "pm", "list", "packages", "-3"]
+                
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                packages = []
+                for line in result.stdout.strip().split('\n'):
+                    if line.startswith('package:'):
+                        packages.append(line.replace('package:', ''))
+                
+                packages.sort()
+                self.root.after(0, lambda: self._update_packages(packages))
+            except Exception as e:
+                self.status_var.set(f"Error fetching apps: {e}")
+        
+        threading.Thread(target=task).start()
+    
+    def _update_packages(self, packages):
+        self.package_combo['values'] = packages
+        if packages:
+            self.package_combo.current(0)
+        self.status_var.set(f"Found {len(packages)} apps")
 
     def on_device_select(self, event):
         serial = self.device_combo.get()
@@ -190,11 +226,28 @@ class SmartLoggerGUI:
                     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                     self.current_log_file = f"logs/recording_{timestamp}.txt"
                     
-                    # Start continuous log capture: adb logcat > file
+                    # Build logcat command
                     if self.log_analyzer.adb.device_serial:
                         full_cmd = [logcat_cmd, "-s", self.log_analyzer.adb.device_serial, "logcat"]
                     else:
                         full_cmd = [logcat_cmd, "logcat"]
+                    
+                    # Filter by selected package if one is chosen
+                    selected_package = self.package_combo.get().strip()
+                    if selected_package:
+                        # Get PID of the app
+                        pid_cmd = [logcat_cmd]
+                        if self.log_analyzer.adb.device_serial:
+                            pid_cmd += ["-s", self.log_analyzer.adb.device_serial]
+                        pid_cmd += ["shell", "pidof", "-s", selected_package]
+                        pid_result = subprocess.run(pid_cmd, capture_output=True, text=True, timeout=5)
+                        app_pid = pid_result.stdout.strip()
+                        
+                        if app_pid:
+                            full_cmd += ["--pid=" + app_pid]
+                            print(f"Filtering logs for {selected_package} (PID: {app_pid})")
+                        else:
+                            print(f"App {selected_package} not running, capturing all logs")
                     
                     # Open log file and start writing
                     self.log_file_handle = open(self.current_log_file, 'w')
