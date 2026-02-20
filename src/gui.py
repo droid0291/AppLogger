@@ -177,12 +177,20 @@ class SmartLoggerGUI:
                     # Create logs directory if it doesn't exist
                     os.makedirs("logs", exist_ok=True)
 
+                    # Clear existing device logs first to reduce token usage
+                    logcat_cmd = self.log_analyzer.adb.adb_path
+                    if self.log_analyzer.adb.device_serial:
+                        clear_cmd = [logcat_cmd, "-s", self.log_analyzer.adb.device_serial, "logcat", "-c"]
+                    else:
+                        clear_cmd = [logcat_cmd, "logcat", "-c"]
+                    subprocess.run(clear_cmd, timeout=5)
+                    print("Cleared device logs")
+
                     # Create log file with timestamp
                     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                     self.current_log_file = f"logs/recording_{timestamp}.txt"
                     
                     # Start continuous log capture: adb logcat > file
-                    logcat_cmd = self.log_analyzer.adb.adb_path
                     if self.log_analyzer.adb.device_serial:
                         full_cmd = [logcat_cmd, "-s", self.log_analyzer.adb.device_serial, "logcat"]
                     else:
