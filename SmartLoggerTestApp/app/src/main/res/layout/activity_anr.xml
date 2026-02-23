@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0F0F1A">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="⏳ ANR Simulations"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="#FFB347"
+            android:paddingBottom="6dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="ANR fires when the main thread is blocked for > 5 seconds. Android will show a system dialog asking the user to wait or close the app."
+            android:textSize="13sp"
+            android:textColor="#8888AA"
+            android:paddingBottom="24dp" />
+
+        <!-- Main Thread Block -->
+        <androidx.cardview.widget.CardView
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            app:cardCornerRadius="12dp"
+            app:cardBackgroundColor="#1A1200">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Block Main Thread"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="#FFB347" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Calls Thread.sleep(6000) directly on the UI thread. The screen will become completely unresponsive. Android surfaces an ANR dialog after 5 seconds."
+                    android:textSize="13sp"
+                    android:textColor="#AA9944"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="8dp" />
+                <TextView
+                    android:id="@+id/statusMainThread"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Status: Ready"
+                    android:textSize="12sp"
+                    android:textColor="#666699"
+                    android:paddingBottom="10dp" />
+                <Button
+                    android:id="@+id/btnTriggerMainThread"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="▶ Block Main Thread (6s)"
+                    android:backgroundTint="#E65100"
+                    android:textColor="#FFFFFF" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Deadlock -->
+        <androidx.cardview.widget.CardView
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            app:cardCornerRadius="12dp"
+            app:cardBackgroundColor="#1A1200">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Deadlock"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="#FFB347" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Two threads each hold one lock and wait for the other. The main thread joins both, causing it to block indefinitely → ANR."
+                    android:textSize="13sp"
+                    android:textColor="#AA9944"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="8dp" />
+                <TextView
+                    android:id="@+id/statusDeadlock"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Status: Ready"
+                    android:textSize="12sp"
+                    android:textColor="#666699"
+                    android:paddingBottom="10dp" />
+                <Button
+                    android:id="@+id/btnTriggerDeadlock"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="▶ Simulate Deadlock"
+                    android:backgroundTint="#E65100"
+                    android:textColor="#FFFFFF" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+    </LinearLayout>
+</ScrollView>

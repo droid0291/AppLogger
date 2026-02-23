@@ -1,61 +1,32 @@
 package com.example.smartloggertest
 
+import android.content.Intent
 import android.os.Bundle
-import android.view.WindowManager
-import android.widget.Button
-import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.switchmaterial.SwitchMaterial
+import androidx.cardview.widget.CardView
 
 class MainActivity : AppCompatActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val secureToggle = findViewById<SwitchMaterial>(R.id.secureToggle)
-        val inputField = findViewById<EditText>(R.id.inputField)
-        val crashButton = findViewById<Button>(R.id.crashButton)
-
-        secureToggle.setOnCheckedChangeListener { _, isChecked ->
-            setSecureFlag(isChecked)
+        findViewById<CardView>(R.id.cardCrash).setOnClickListener {
+            startActivity(Intent(this, CrashDemoActivity::class.java))
         }
-
-        crashButton.setOnClickListener {
-            // Simulate a realistic crash scenario
-            simulateCrash()
+        findViewById<CardView>(R.id.cardAnr).setOnClickListener {
+            startActivity(Intent(this, AnrDemoActivity::class.java))
         }
-    }
-
-    private fun setSecureFlag(isSecure: Boolean) {
-        if (isSecure) {
-            window.setFlags(
-                WindowManager.LayoutParams.FLAG_SECURE,
-                WindowManager.LayoutParams.FLAG_SECURE
-            )
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        findViewById<CardView>(R.id.cardUiBug).setOnClickListener {
+            startActivity(Intent(this, UiBugDemoActivity::class.java))
         }
-    }
-
-    private fun simulateCrash() {
-        // Simulate a realistic banking app crash
-        val transactions = loadTransactions()
-        val balance = calculateBalance(transactions)
-        updateUI(balance)
-    }
-
-    private fun loadTransactions(): List<String>? {
-        // Simulate network/database call that returns null
-        return null
-    }
-
-    private fun calculateBalance(transactions: List<String>?): Double {
-        // This will crash with NPE when transactions is null
-        return transactions!!.size.toDouble() * 100.0
-    }
-
-    private fun updateUI(balance: Double) {
-        // Never reached due to crash
+        findViewById<CardView>(R.id.cardNetwork).setOnClickListener {
+            startActivity(Intent(this, NetworkDemoActivity::class.java))
+        }
+        findViewById<CardView>(R.id.cardPerformance).setOnClickListener {
+            startActivity(Intent(this, PerformanceDemoActivity::class.java))
+        }
+        findViewById<CardView>(R.id.cardSecurity).setOnClickListener {
+            startActivity(Intent(this, SecurityDemoActivity::class.java))
+        }
     }
 }

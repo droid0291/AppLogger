@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0F0F1A">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="⚡ Performance Simulations"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="#C77DFF"
+            android:paddingBottom="6dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Use Android Studio Profiler while running these to observe memory and CPU impact in real time."
+            android:textSize="13sp"
+            android:textColor="#8888AA"
+            android:paddingBottom="24dp" />
+
+        <!-- Memory Leak -->
+        <androidx.cardview.widget.CardView
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            app:cardCornerRadius="12dp"
+            app:cardBackgroundColor="#130A1E">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Memory Leak"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="#C77DFF" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Stores 500 View instances (holding Activity Context) in a static list. GC cannot reclaim them. Memory grows with every press and on rotation."
+                    android:textSize="13sp"
+                    android:textColor="#775599"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="10dp" />
+                <TextView
+                    android:id="@+id/statusMemory"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Leaked views: 0"
+                    android:textSize="13sp"
+                    android:textColor="#C77DFF"
+                    android:background="#1E0A2E"
+                    android:padding="10dp"
+                    android:layout_marginBottom="10dp" />
+                <Button
+                    android:id="@+id/btnLeakMemory"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="▶ Leak 500 Views"
+                    android:backgroundTint="#6A1B9A"
+                    android:textColor="#FFFFFF" />
+                <Button
+                    android:id="@+id/btnClearLeak"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="🗑 Clear Leaked Views"
+                    android:backgroundTint="#37474F"
+                    android:textColor="#FFFFFF"
+                    android:layout_marginTop="8dp" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- CPU Spike -->
+        <androidx.cardview.widget.CardView
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            app:cardCornerRadius="12dp"
+            app:cardBackgroundColor="#130A1E">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="CPU Spike"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="#C77DFF" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Runs a busy loop on a background thread for 15 seconds. Observe CPU usage spike in profiler. Simulates infinite polling or unthrottled computation."
+                    android:textSize="13sp"
+                    android:textColor="#775599"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="10dp" />
+                <TextView
+                    android:id="@+id/statusCpu"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="CPU Spike: Idle"
+                    android:textSize="13sp"
+                    android:textColor="#C77DFF"
+                    android:background="#1E0A2E"
+                    android:padding="10dp"
+                    android:layout_marginBottom="10dp" />
+                <Button
+                    android:id="@+id/btnCpuSpike"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="▶ Start CPU Spike (15s)"
+                    android:backgroundTint="#6A1B9A"
+                    android:textColor="#FFFFFF" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+    </LinearLayout>
+</ScrollView>

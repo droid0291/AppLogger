@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0F0F1A">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="💥 Crash Simulations"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="#FF6B6B"
+            android:paddingBottom="6dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Each button triggers a real exception. Check Logcat for the full stack trace."
+            android:textSize="13sp"
+            android:textColor="#8888AA"
+            android:paddingBottom="24dp" />
+
+        <!-- NullPointerException -->
+        <androidx.cardview.widget.CardView
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            app:cardCornerRadius="12dp"
+            app:cardBackgroundColor="#1A0808">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="NullPointerException"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="#FF6B6B" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="A data-loading method returns null. The result is force-unwrapped with !! causing an immediate crash. Common in: API responses, DB queries."
+                    android:textSize="13sp"
+                    android:textColor="#AA8888"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="12dp" />
+                <Button
+                    android:id="@+id/btnTriggerNpe"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="▶ Trigger NPE Crash"
+                    android:backgroundTint="#C62828"
+                    android:textColor="#FFFFFF" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- OOM -->
+        <androidx.cardview.widget.CardView
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            app:cardCornerRadius="12dp"
+            app:cardBackgroundColor="#1A0808">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="OutOfMemoryError"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="#FF6B6B" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Allocates 10 MB chunks in a loop until the JVM heap is exhausted. Common in: loading large bitmaps/videos without sampling."
+                    android:textSize="13sp"
+                    android:textColor="#AA8888"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="12dp" />
+                <Button
+                    android:id="@+id/btnTriggerOom"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="▶ Trigger OOM Crash"
+                    android:backgroundTint="#C62828"
+                    android:textColor="#FFFFFF" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- StackOverflow -->
+        <androidx.cardview.widget.CardView
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="14dp"
+            app:cardCornerRadius="12dp"
+            app:cardBackgroundColor="#1A0808">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="StackOverflowError"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="#FF6B6B" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="A function calls itself infinitely with no base case, exhausting the call stack. Common in: recursive data parsing, circular object graphs."
+                    android:textSize="13sp"
+                    android:textColor="#AA8888"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="12dp" />
+                <Button
+                    android:id="@+id/btnTriggerSoe"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="▶ Trigger Stack Overflow"
+                    android:backgroundTint="#C62828"
+                    android:textColor="#FFFFFF" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- IndexOutOfBounds -->
+        <androidx.cardview.widget.CardView
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            app:cardCornerRadius="12dp"
+            app:cardBackgroundColor="#1A0808">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="ArrayIndexOutOfBoundsException"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="#FF6B6B" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Accesses index 99 in a 3-item list. Common in: RecyclerView adapters, pagination logic, response array assumptions."
+                    android:textSize="13sp"
+                    android:textColor="#AA8888"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="12dp" />
+                <Button
+                    android:id="@+id/btnTriggerAiobe"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="▶ Trigger Index Out Of Bounds"
+                    android:backgroundTint="#C62828"
+                    android:textColor="#FFFFFF" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+    </LinearLayout>
+</ScrollView>
