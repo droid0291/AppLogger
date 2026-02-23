@@ -442,6 +442,15 @@ class SmartLoggerGUI:
             style="Ghost.TButton",
             command=self.create_bug_report).pack(side="left", padx=(0, 8))
 
+        self._jira_btn = ttk.Button(self._post_session_frame,
+            text="📋  File Jira Ticket",
+            style="Ghost.TButton",
+            command=self.file_jira_ticket)
+        self._jira_btn.pack(side="left", padx=(0, 8))
+        # Hide Jira button if Jira not configured
+        if not self.jira_client:
+            self._jira_btn.pack_forget()
+
         ttk.Button(self._post_session_frame,
             text="🗑  Clear Session",
             style="Ghost.TButton",
@@ -808,33 +817,59 @@ class SmartLoggerGUI:
                 )
 
                 self.root.after(0, lambda: self._show_analysis(report))
-
-                # JIRA
-                if self.jira_client:
-                    self.root.after(0, lambda: self.status_var.set("Creating Jira ticket…"))
-                    summary     = "App Crash – Auto-reported by SmartLogger"
-                    description = self.jira_client.format_bug_description(
-                        steps, logs_analysis, device_info,
-                        getattr(self, "last_video_path", None))
-                    attachments = []
-                    if hasattr(self, "last_video_path") and self.last_video_path:
-                        attachments.append(self.last_video_path)
-                    if self.last_log_file:
-                        attachments.append(self.last_log_file)
-                    issue_key = self.jira_client.create_bug(
-                        summary=summary, description=description,
-                        priority="High", labels=["auto-reported", "smartlogger"],
-                        attachments=attachments)
-                    msg = f"Jira ticket created: {issue_key}" if issue_key else "Jira ticket creation failed"
-                    self.root.after(0, lambda m=msg: self.status_var.set(m))
-                else:
-                    self.root.after(0, lambda: self.status_var.set(
-                        "Bug report ready (Jira not configured)"))
+                self.root.after(0, lambda: self.status_var.set(
+                    "Analysis complete — click 📋 File Jira Ticket to log the bug"))
 
             except Exception as e:
                 import traceback
                 traceback.print_exc()
                 self.root.after(0, lambda: self.status_var.set(f"Error: {e}"))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def file_jira_ticket(self):
+        """Standalone Jira ticket creation — called only when user clicks the button."""
+        if not self.jira_client:
+            self.status_var.set("Jira not configured — check your .env file")
+            return
+
+        # Grab report text from the analysis card if available
+        try:
+            report_text = self._analysis_text.get("1.0", "end").strip()
+        except Exception:
+            report_text = ""
+
+        def task():
+            self.root.after(0, lambda: self.status_var.set("Creating Jira ticket…"))
+            try:
+                device_info = self.log_analyzer.get_device_info() if self.log_analyzer else {}
+                summary = "App Crash – Reported by SmartLogger"
+                description = self.jira_client.format_bug_description(
+                    report_text or "See attached logs and recording.",
+                    "",
+                    device_info,
+                    getattr(self, "last_video_path", None)
+                )
+                attachments = []
+                if getattr(self, "last_video_path", None) and os.path.exists(self.last_video_path):
+                    attachments.append(self.last_video_path)
+                if getattr(self, "last_log_file", None) and os.path.exists(self.last_log_file):
+                    attachments.append(self.last_log_file)
+
+                issue_key = self.jira_client.create_bug(
+                    summary=summary,
+                    description=description,
+                    priority="High",
+                    labels=["smartlogger"],
+                    attachments=attachments
+                )
+                if issue_key:
+                    msg = f"✅ Jira ticket created: {issue_key}"
+                else:
+                    msg = "❌ Jira ticket creation failed — check credentials"
+                self.root.after(0, lambda m=msg: self.status_var.set(m))
+            except Exception as e:
+                self.root.after(0, lambda: self.status_var.set(f"Jira error: {e}"))
 
         threading.Thread(target=task, daemon=True).start()
 
