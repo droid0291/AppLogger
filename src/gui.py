@@ -5,14 +5,15 @@ import threading
 import os
 import datetime
 import subprocess
+import webbrowser
 
 # ── Colour tokens ────────────────────────────────────────────────────────────
-C_SIDEBAR_BG    = "#1C1C2E"   # deep indigo-black sidebar
-C_SIDEBAR_HOVER = "#2A2A40"
-C_TAB_ACTIVE    = "#0071E3"   # Apple blue
-C_TAB_INACTIVE  = "#1C1C2E"
+C_SIDEBAR_BG    = "#2C3E50"   # professional dark slate
+C_SIDEBAR_HOVER = "#374F65"
+C_TAB_ACTIVE    = "#2980B9"   # rich steel blue
+C_TAB_INACTIVE  = "#2C3E50"
 C_TAB_TEXT      = "#FFFFFF"
-C_TAB_TEXT_DIM  = "#8E8EA0"
+C_TAB_TEXT_DIM  = "#BDC3C7"   # light silver
 C_MAIN_BG       = "#F2F2F7"   # Apple light grey
 C_CARD_BG       = "#FFFFFF"
 C_BORDER        = "#D1D1D6"
@@ -59,6 +60,9 @@ class SmartLoggerGUI:
         self._tab_frames        = {}
         self._session_timer     = None
         self._elapsed_seconds   = 0
+        self._blink_dot_state   = False
+        self._blink_job         = None
+        self._last_jira_url     = None
 
         self.root.title("SmartLogger")
         self.root.geometry("1120x700")
@@ -393,10 +397,16 @@ class SmartLoggerGUI:
         log_header = tk.Frame(log_wrapper, bg="#161B22")
         log_header.grid(row=0, column=0, sticky="ew")
 
-        tk.Label(log_header, text="🔴  Live Logcat",
+        self._logcat_dot_label = tk.Label(log_header, text="⬤",
+            font=(FONT_FAMILY, 9),
+            bg="#161B22", fg="#555C6A",
+            padx=8, pady=6)
+        self._logcat_dot_label.pack(side="left")
+
+        tk.Label(log_header, text="Live Logcat",
             font=(FONT_FAMILY, FONT_SIZE_SM, "bold"),
             bg="#161B22", fg=C_LOG_FG,
-            padx=12, pady=6).pack(side="left")
+            padx=0, pady=6).pack(side="left")
 
         self._log_filter_label = tk.Label(log_header, text="",
             font=(FONT_FAMILY, FONT_SIZE_SM - 1),
@@ -456,10 +466,34 @@ class SmartLoggerGUI:
             style="Ghost.TButton",
             command=self._clear_crash_session).pack(side="left")
 
+        # ── Progress bar (shown during async ops) ────────────────────────────
+        self._progress_frame = tk.Frame(frame, bg=C_MAIN_BG)
+        # not gridded until needed
+        self._progress_bar = ttk.Progressbar(self._progress_frame,
+            mode="indeterminate", length=300)
+        self._progress_bar.pack(side="left", padx=(0, 12))
+        self._progress_label = tk.Label(self._progress_frame, text="",
+            font=(FONT_FAMILY, FONT_SIZE_SM),
+            bg=C_MAIN_BG, fg=C_TEXT_SEC)
+        self._progress_label.pack(side="left")
+
         # ── AI Analysis output (collapsed until analysis runs) ────────────────
         self._analysis_card = tk.Frame(frame, bg=C_CARD_BG,
             highlightbackground=C_BORDER, highlightthickness=1)
         # not gridded until needed
+
+        # Analysis header row (title + Jira link)
+        _analysis_header = tk.Frame(self._analysis_card, bg=C_CARD_BG)
+        _analysis_header.pack(fill="x", padx=12, pady=(8, 0))
+
+        tk.Label(_analysis_header, text="AI Analysis",
+            font=(FONT_FAMILY, FONT_SIZE_SM, "bold"),
+            bg=C_CARD_BG, fg=C_TEXT_PRIMARY).pack(side="left")
+
+        self._jira_link_label = tk.Label(_analysis_header, text="",
+            font=(FONT_FAMILY, FONT_SIZE_SM, "underline"),
+            bg=C_CARD_BG, fg=C_ACCENT, cursor="hand2")
+        self._jira_link_label.pack(side="right")
 
         self._analysis_text = scrolledtext.ScrolledText(self._analysis_card,
             wrap=tk.WORD,
@@ -578,6 +612,9 @@ class SmartLoggerGUI:
         self._session_status_label.configure(text="Recording…", fg=C_DANGER)
         self._post_session_frame.pack_forget()
 
+        # Start blinking logcat dot
+        self._start_blink()
+
         # Hide analysis card if visible
         self._analysis_card.grid_forget()
 
@@ -629,6 +666,9 @@ class SmartLoggerGUI:
         self._session_dot.configure(fg=C_SUCCESS)
         self._session_status_label.configure(text="Session complete", fg=C_SUCCESS)
 
+        # Stop blinking dot
+        self._stop_blink()
+
         self._append_log("\n── Session stopped ──\n", tag="dim")
 
         # Show post-session actions
@@ -639,6 +679,47 @@ class SmartLoggerGUI:
     # ─────────────────────────────────────────────────────────────────────────
     # Logcat streaming
     # ─────────────────────────────────────────────────────────────────────────
+
+    # ───────────────────────────────────────────────────────────────────────────────
+    # Blink dot + progress helpers
+    # ───────────────────────────────────────────────────────────────────────────────
+
+    def _start_blink(self):
+        """Smoothly blink the logcat dot red while recording."""
+        self._blink_dot_state = True
+        self._do_blink(True)
+
+    def _stop_blink(self):
+        """Stop blinking and reset dot to inactive grey."""
+        self._blink_dot_state = False
+        if self._blink_job:
+            self.root.after_cancel(self._blink_job)
+            self._blink_job = None
+        try:
+            self._logcat_dot_label.configure(fg="#555C6A")
+        except Exception:
+            pass
+
+    def _do_blink(self, visible):
+        if not self._blink_dot_state:
+            return
+        color = C_DANGER if visible else "#4A1A18"   # bright red → dim red
+        try:
+            self._logcat_dot_label.configure(fg=color)
+        except Exception:
+            return
+        self._blink_job = self.root.after(600, lambda: self._do_blink(not visible))
+
+    def _show_progress(self, message):
+        """Show indeterminate progress bar with message below the action bar."""
+        self._progress_label.configure(text=message)
+        self._progress_frame.grid(row=4, column=0, sticky="ew", padx=28, pady=(0, 4))
+        self._progress_bar.start(12)
+
+    def _hide_progress(self):
+        """Stop and hide the progress bar."""
+        self._progress_bar.stop()
+        self._progress_frame.grid_forget()
 
     def _get_pid(self, logcat_bin, selected_package):
         """Return PID string for selected_package, or '' if not running."""
@@ -828,7 +909,7 @@ class SmartLoggerGUI:
 
     def create_bug_report(self):
         def task():
-            self.status_var.set("Generating bug report…")
+            self.root.after(0, lambda: self._show_progress("Generating bug report…"))
             try:
                 device_info = {}
                 if self.log_analyzer:
@@ -841,7 +922,7 @@ class SmartLoggerGUI:
                 # Video → steps
                 video_path = getattr(self, "last_video_path", None)
                 if video_path and os.path.exists(video_path):
-                    self.root.after(0, lambda: self.status_var.set("Uploading video for step analysis…"))
+                    self.root.after(0, lambda: self._show_progress("Uploading video — analysing steps…"))
                     prompt = (
                         "Analyse this mobile app screen recording and generate clear, "
                         "numbered reproduction steps. Focus on: screens shown, UI elements "
@@ -865,7 +946,7 @@ class SmartLoggerGUI:
                             log_content = f.read()
 
                 if log_content:
-                    self.root.after(0, lambda: self.status_var.set("Analysing logs with AI…"))
+                    self.root.after(0, lambda: self._show_progress("Analysing logs with AI…"))
                     prompt = (
                         "Analyse the following Android crash log and provide:\n"
                         "1. Root cause\n2. Specific line/method where it occurred\n"
@@ -893,6 +974,7 @@ class SmartLoggerGUI:
                     f"CRASH ANALYSIS:\n{logs_analysis}\n"
                 )
 
+                self.root.after(0, self._hide_progress)
                 self.root.after(0, lambda: self._show_analysis(report))
                 self.root.after(0, lambda: self.status_var.set(
                     "Analysis complete — click 📋 File Jira Ticket to log the bug"))
@@ -900,6 +982,7 @@ class SmartLoggerGUI:
             except Exception as e:
                 import traceback
                 traceback.print_exc()
+                self.root.after(0, self._hide_progress)
                 self.root.after(0, lambda: self.status_var.set(f"Error: {e}"))
 
         threading.Thread(target=task, daemon=True).start()
@@ -917,7 +1000,7 @@ class SmartLoggerGUI:
             report_text = ""
 
         def task():
-            self.root.after(0, lambda: self.status_var.set("Creating Jira ticket…"))
+            self.root.after(0, lambda: self._show_progress("Creating Jira ticket…"))
             try:
                 device_info = self.log_analyzer.get_device_info() if self.log_analyzer else {}
                 summary = "App Crash – Reported by SmartLogger"
@@ -940,15 +1023,29 @@ class SmartLoggerGUI:
                     labels=["smartlogger"],
                     attachments=attachments
                 )
+                self.root.after(0, self._hide_progress)
                 if issue_key:
-                    msg = f"✅ Jira ticket created: {issue_key}"
+                    ticket_url = f"{self.jira_client.jira_url}/browse/{issue_key}"
+                    self._last_jira_url = ticket_url
+                    self.root.after(0, lambda u=ticket_url, k=issue_key:
+                        self._show_jira_link(u, k))
+                    self.root.after(0, lambda k=issue_key: self.status_var.set(
+                        f"✅ Jira ticket created: {k}"))
                 else:
-                    msg = "❌ Jira ticket creation failed — check credentials"
-                self.root.after(0, lambda m=msg: self.status_var.set(m))
+                    self.root.after(0, lambda: self.status_var.set(
+                        "❌ Jira ticket creation failed — check credentials"))
             except Exception as e:
+                self.root.after(0, self._hide_progress)
                 self.root.after(0, lambda: self.status_var.set(f"Jira error: {e}"))
 
         threading.Thread(target=task, daemon=True).start()
+
+    def _show_jira_link(self, url, issue_key):
+        """Display a clickable Jira ticket URL in the analysis card header."""
+        self._jira_link_label.configure(
+            text=f"📋  {issue_key} → Open in Jira")
+        self._jira_link_label.bind("<Button-1>",
+            lambda e, u=url: webbrowser.open(u))
 
     def _show_analysis(self, text):
         # Show the analysis card below the action bar
