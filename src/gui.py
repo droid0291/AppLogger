@@ -961,28 +961,35 @@ class SmartLoggerGUI:
         self.status_var.set("Analysis complete")
 
     def _clear_crash_session(self):
-        if messagebox.askyesno("Clear Session",
-                               "Delete this session's recordings and logs?"):
-            import shutil
-            for path in (getattr(self, "last_video_path", None),
-                         getattr(self, "last_log_file", None)):
-                if path and os.path.exists(path):
+        import shutil
+        if messagebox.askyesno("Clear All Sessions",
+                               "This will delete ALL recordings and logs. Continue?"):
+            deleted = []
+
+            for folder in ("logs", "recordings"):
+                if os.path.exists(folder):
                     try:
-                        os.remove(path)
-                    except Exception:
-                        pass
+                        shutil.rmtree(folder)
+                        os.makedirs(folder, exist_ok=True)
+                        deleted.append(folder)
+                    except Exception as e:
+                        print(f"Error clearing {folder}: {e}")
+
+            # Reset in-memory references
             self.last_video_path = None
             self.last_log_file   = None
 
+            # Clear logcat pane
             self._logcat_text.configure(state="normal")
             self._logcat_text.delete("1.0", "end")
             self._logcat_text.configure(state="disabled")
 
+            # Reset UI state
             self._analysis_card.grid_forget()
             self._post_session_frame.pack_forget()
             self._session_dot.configure(fg=C_BORDER)
             self._session_status_label.configure(text="No active session", fg=C_TEXT_SEC)
-            self.status_var.set("Session cleared")
+            self.status_var.set(f"Cleared: {', '.join(deleted)}")
 
     # ─────────────────────────────────────────────────────────────────────────
     # Legacy stubs (keep compatibility with main.py callers)
