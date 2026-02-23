@@ -308,6 +308,17 @@ class SmartLoggerGUI:
             bg="#0D0D1A", fg=C_DANGER,
             anchor="e", padx=10).pack(side="right", fill="y")
 
+        # Progress indicator (hidden until an async op starts)
+        self._progress_bar = ttk.Progressbar(bar,
+            mode="indeterminate", length=180, style="Status.Horizontal.TProgressbar")
+        self._progress_status_var = tk.StringVar(value="")
+        self._progress_msg_label = tk.Label(bar,
+            textvariable=self._progress_status_var,
+            font=(FONT_FAMILY, FONT_SIZE_SM - 1),
+            bg="#0D0D1A", fg=C_TAB_TEXT_DIM,
+            anchor="w", padx=4)
+        # both hidden initially
+
     # ─────────────────────────────────────────────────────────────────────────
     # Tab switching
     # ─────────────────────────────────────────────────────────────────────────
@@ -465,17 +476,6 @@ class SmartLoggerGUI:
             text="🗑  Clear Session",
             style="Ghost.TButton",
             command=self._clear_crash_session).pack(side="left")
-
-        # ── Progress bar (shown during async ops) ────────────────────────────
-        self._progress_frame = tk.Frame(frame, bg=C_MAIN_BG)
-        # not gridded until needed
-        self._progress_bar = ttk.Progressbar(self._progress_frame,
-            mode="indeterminate", length=300)
-        self._progress_bar.pack(side="left", padx=(0, 12))
-        self._progress_label = tk.Label(self._progress_frame, text="",
-            font=(FONT_FAMILY, FONT_SIZE_SM),
-            bg=C_MAIN_BG, fg=C_TEXT_SEC)
-        self._progress_label.pack(side="left")
 
         # ── AI Analysis output (collapsed until analysis runs) ────────────────
         self._analysis_card = tk.Frame(frame, bg=C_CARD_BG,
@@ -711,15 +711,18 @@ class SmartLoggerGUI:
         self._blink_job = self.root.after(600, lambda: self._do_blink(not visible))
 
     def _show_progress(self, message):
-        """Show indeterminate progress bar with message below the action bar."""
-        self._progress_label.configure(text=message)
-        self._progress_frame.grid(row=4, column=0, sticky="ew", padx=28, pady=(0, 4))
+        """Show indeterminate progress bar in the status bar."""
+        self._progress_status_var.set(message)
+        self._progress_msg_label.pack(side="right", padx=(0, 4), fill="y")
+        self._progress_bar.pack(side="right", padx=(0, 8), pady=3, fill="y")
         self._progress_bar.start(12)
 
     def _hide_progress(self):
-        """Stop and hide the progress bar."""
+        """Stop and hide the status bar progress indicator."""
         self._progress_bar.stop()
-        self._progress_frame.grid_forget()
+        self._progress_bar.pack_forget()
+        self._progress_msg_label.pack_forget()
+        self._progress_status_var.set("")
 
     def _get_pid(self, logcat_bin, selected_package):
         """Return PID string for selected_package, or '' if not running."""
