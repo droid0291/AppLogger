@@ -1087,17 +1087,29 @@ class SmartLoggerGUI:
             # Reset in-memory references
             self.last_video_path = None
             self.last_log_file   = None
+            self._last_jira_url  = None
 
             # Clear logcat pane
             self._logcat_text.configure(state="normal")
             self._logcat_text.delete("1.0", "end")
             self._logcat_text.configure(state="disabled")
 
-            # Reset UI state
+            # Hide all post-session UI elements
             self._analysis_card.grid_forget()
             self._post_session_frame.pack_forget()
+
+            # Clear the Jira link label
+            self._jira_link_label.configure(text="")
+            self._jira_link_label.unbind("<Button-1>")
+
+            # Hide progress bar if left running
+            self._hide_progress()
+
+            # Reset session status indicators
             self._session_dot.configure(fg=C_BORDER)
             self._session_status_label.configure(text="No active session", fg=C_TEXT_SEC)
+            self._timer_var.set("")
+
             self.status_var.set(f"Cleared: {', '.join(deleted)}")
 
     # ─────────────────────────────────────────────────────────────────────────
