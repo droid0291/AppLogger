@@ -155,6 +155,15 @@ class SmartLoggerGUI:
         style.configure("Sidebar.TFrame", background=C_SIDEBAR_BG)
         style.configure("Header.TFrame", background=C_SIDEBAR_BG)
 
+        # Progress bar in status bar — steel blue fill, dark trough
+        style.configure("Status.Horizontal.TProgressbar",
+            troughcolor="#1A252F",       # dark trough matching status bar
+            background=C_TAB_ACTIVE,     # #2980B9 steel blue fill
+            bordercolor="#0D0D1A",
+            lightcolor=C_TAB_ACTIVE,
+            darkcolor="#1F618D",
+            thickness=6)
+
         style.configure("Sidebar.TLabel",
             background=C_SIDEBAR_BG,
             foreground=C_TAB_TEXT_DIM,
