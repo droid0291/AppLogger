@@ -640,6 +640,18 @@ class SmartLoggerGUI:
     # Logcat streaming
     # ─────────────────────────────────────────────────────────────────────────
 
+    def _get_pid(self, logcat_bin, selected_package):
+        """Return PID string for selected_package, or '' if not running."""
+        pid_cmd = [logcat_bin]
+        if self.adb.device_serial:
+            pid_cmd += ["-s", self.adb.device_serial]
+        pid_cmd += ["shell", "pidof", "-s", selected_package]
+        try:
+            result = subprocess.run(pid_cmd, capture_output=True, text=True, timeout=5)
+            return result.stdout.strip()
+        except Exception:
+            return ""
+
     def _start_logcat(self, selected_package=""):
         try:
             os.makedirs("logs", exist_ok=True)
@@ -655,6 +667,7 @@ class SmartLoggerGUI:
             # Build logcat command
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             self.current_log_file = f"logs/recording_{timestamp}.txt"
+            self._logcat_package = selected_package  # stored for stream filter
 
             full_cmd = [logcat_bin]
             if self.adb.device_serial:
@@ -662,14 +675,31 @@ class SmartLoggerGUI:
             full_cmd += ["logcat"]
 
             if selected_package:
-                pid_cmd = [logcat_bin]
-                if self.adb.device_serial:
-                    pid_cmd += ["-s", self.adb.device_serial]
-                pid_cmd += ["shell", "pidof", "-s", selected_package]
-                pid_result = subprocess.run(pid_cmd, capture_output=True, text=True, timeout=5)
-                app_pid = pid_result.stdout.strip()
+                # Try to get PID immediately
+                app_pid = self._get_pid(logcat_bin, selected_package)
+
                 if app_pid:
                     full_cmd += [f"--pid={app_pid}"]
+                    self._logcat_app_pid = app_pid
+                    self._append_log(
+                        f"── Filtering logs for {selected_package} (PID: {app_pid}) ──\n",
+                        tag="ok")
+                else:
+                    # App not running yet — start watcher and inform user
+                    self._logcat_app_pid = None
+                    self._append_log(
+                        f"⚠ App '{selected_package}' not running.\n"
+                        f"  Open the app on your device — logs will auto-filter when detected.\n"
+                        f"  Until then, only app logs will be shown once PID is found.\n",
+                        tag="warn")
+                    # Start PID watcher thread
+                    threading.Thread(
+                        target=self._wait_for_pid,
+                        args=(logcat_bin, selected_package),
+                        daemon=True).start()
+            else:
+                self._logcat_app_pid = None
+                self._append_log("── No app filter — capturing all logs ──\n", tag="dim")
 
             self.log_file_handle = open(self.current_log_file, "w")
             self.log_process = subprocess.Popen(
@@ -686,6 +716,41 @@ class SmartLoggerGUI:
         except Exception as e:
             self._append_log(f"Logcat error: {e}\n", tag="error")
 
+    def _wait_for_pid(self, logcat_bin, package):
+        """Retry getting PID every 2 s; once found, restart logcat with filter."""
+        import time
+        while self.recording:
+            time.sleep(2)
+            pid = self._get_pid(logcat_bin, package)
+            if pid:
+                self._logcat_app_pid = pid
+                self.root.after(0, lambda p=pid: self._append_log(
+                    f"── App detected (PID: {p}) — filtering logs for {package} ──\n",
+                    tag="ok"))
+                # Kill current unfiltered logcat and restart with PID filter
+                if self.log_process:
+                    self.log_process.terminate()
+                import time as _t; _t.sleep(0.5)
+
+                new_cmd = [logcat_bin]
+                if self.adb.device_serial:
+                    new_cmd += ["-s", self.adb.device_serial]
+                new_cmd += ["logcat", f"--pid={pid}"]
+
+                try:
+                    self.log_process = subprocess.Popen(
+                        new_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL,
+                        text=True,
+                        bufsize=1
+                    )
+                    threading.Thread(target=self._stream_logcat, daemon=True).start()
+                except Exception as e:
+                    self.root.after(0, lambda: self._append_log(
+                        f"Failed to restart filtered logcat: {e}\n", tag="error"))
+                return  # done watching
+
     def _stream_logcat(self):
         """Background thread: read logcat stdout line-by-line, emit to UI."""
         MAX_LINES = 500
@@ -693,6 +758,17 @@ class SmartLoggerGUI:
 
         try:
             for line in self.log_process.stdout:
+                if not self.recording:
+                    break
+
+                # Python-side package filter — belt-and-suspenders
+                pkg = getattr(self, "_logcat_package", "")
+                if pkg and pkg not in line:
+                    # Also allow lines that contain the PID we know about
+                    pid = getattr(self, "_logcat_app_pid", None)
+                    if pid and f" {pid} " not in line and f"({pid})" not in line:
+                        continue
+
                 if self.log_file_handle:
                     self.log_file_handle.write(line)
 
@@ -705,6 +781,7 @@ class SmartLoggerGUI:
                     line_count = 0
         except Exception:
             pass
+
 
     def _classify_log_line(self, line):
         u = line.upper()
