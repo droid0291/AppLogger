@@ -2,29 +2,49 @@ import sys
 import os
 import tkinter as tk
 from config import Config
-from src.adb_manager import ADBManager
 from src.gemini_client import GeminiClient
 from src.secure_handler import SecureHandler
-from src.video_recorder import VideoRecorder
 from src.log_analyzer import LogAnalyzer
 from src.steps_generator import StepsGenerator
 from src.jira_client import JiraClient
 from src.gui import SmartLoggerGUI
 
+
+def _create_device_manager():
+    """Instantiate the correct DeviceManager based on PLATFORM config."""
+    if Config.PLATFORM == "ios":
+        from src.ios_manager import IOSManager
+        return IOSManager()
+    else:
+        from src.android_manager import AndroidManager
+        return AndroidManager(
+            adb_path=Config.ADB_PATH,
+            device_serial=Config.DEVICE_SERIAL
+        )
+
+
+def _create_recorder(device_manager):
+    """Instantiate the correct recorder for the active device manager."""
+    if Config.PLATFORM == "ios":
+        from src.ios_recorder import IOSRecorder
+        return IOSRecorder(device_manager)
+    else:
+        from src.video_recorder import VideoRecorder
+        return VideoRecorder(adb_manager=device_manager)
+
+
 def main():
-    print("Starting SmartLogger GUI...")
+    print(f"Starting SmartLogger GUI... (platform: {Config.PLATFORM})")
     Config.validate()
-    
-    adb = ADBManager(adb_path=Config.ADB_PATH, device_serial=Config.DEVICE_SERIAL)
-    gemini = GeminiClient(api_key=Config.GEMINI_API_KEY)
-    secure = SecureHandler(adb_manager=adb)
-    
-    # Initialize bug reporting modules
-    video_recorder = VideoRecorder(adb_manager=adb)
-    log_analyzer = LogAnalyzer(adb_manager=adb, gemini_client=gemini)
-    steps_generator = StepsGenerator(gemini_client=gemini, video_recorder=video_recorder)
-    
-    # Initialize JIRA client (optional - only if configured)
+
+    device_manager = _create_device_manager()
+    gemini         = GeminiClient(api_key=Config.GEMINI_API_KEY)
+    secure         = SecureHandler(adb_manager=device_manager)
+
+    recorder       = _create_recorder(device_manager)
+    log_analyzer   = LogAnalyzer(adb_manager=device_manager, gemini_client=gemini)
+    steps_gen      = StepsGenerator(gemini_client=gemini, video_recorder=recorder)
+
     jira_client = None
     if Config.JIRA_URL:
         jira_client = JiraClient(
@@ -35,9 +55,12 @@ def main():
         )
 
     root = tk.Tk()
-    app = SmartLoggerGUI(root, adb, gemini, secure, video_recorder, log_analyzer, steps_generator, jira_client)
+    app = SmartLoggerGUI(
+        root, device_manager, gemini, secure,
+        recorder, log_analyzer, steps_gen, jira_client
+    )
     root.mainloop()
+
 
 if __name__ == "__main__":
     main()
-
