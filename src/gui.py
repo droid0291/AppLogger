@@ -612,13 +612,19 @@ class SmartLoggerGUI:
 
     def refresh_packages(self):
         """Fetch installed apps — works for both Android packages and iOS bundle IDs."""
+        # Guard: must have a device selected
+        device_id = self.device_combo.get()
+        if not device_id:
+            self.status_var.set("⚠ Select a device first, then Refresh Apps")
+            return
+
         def task():
             self.root.after(0, lambda: self.status_var.set("Fetching installed apps…"))
             try:
                 apps = self.adb.list_installed_apps()
                 self.root.after(0, lambda: self._update_packages(apps))
             except Exception as e:
-                self.root.after(0, lambda: self.status_var.set(f"Error fetching apps: {e}"))
+                self.root.after(0, lambda: self.status_var.set(f"❌ Error fetching apps: {e}"))
         threading.Thread(target=task, daemon=True).start()
 
 
@@ -627,7 +633,10 @@ class SmartLoggerGUI:
         if packages:
             self.package_combo.current(0)
             self._crash_app_label.configure(text=packages[0])
-        self.status_var.set(f"Found {len(packages)} app(s)")
+            self.status_var.set(f"Found {len(packages)} app(s)")
+        else:
+            self.status_var.set("No apps found — make sure the device is connected and unlocked")
+
 
     # ─────────────────────────────────────────────────────────────────────────
     # Recording toggle (crash tab)
