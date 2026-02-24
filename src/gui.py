@@ -254,6 +254,29 @@ class SmartLoggerGUI:
         ttk.Button(sel_frame, text="↺  Refresh Apps", style="Ghost.TButton",
             command=self.refresh_packages).grid(row=5, column=0, sticky="ew")
 
+        # ── Platform toggle ──────────────────────────────────────────────────
+        tk.Frame(sel_frame, bg="#2E2E44", height=1).grid(
+            row=6, column=0, sticky="ew", pady=(12, 6))
+        tk.Label(sel_frame, text="PLATFORM",
+                 font=(FONT_FAMILY, FONT_SIZE_SM - 1),
+                 bg=C_SIDEBAR_BG, fg=C_TAB_TEXT_DIM
+                 ).grid(row=7, column=0, sticky="w")
+        self._plat_var = tk.StringVar(
+            value=getattr(self.adb, "platform", "android"))
+        btn_row = ttk.Frame(sel_frame, style="Sidebar.TFrame")
+        btn_row.grid(row=8, column=0, sticky="ew", pady=(2, 0))
+        for p in ("android", "ios"):
+            tk.Radiobutton(
+                btn_row, text=p.capitalize(),
+                variable=self._plat_var, value=p,
+                command=self._on_platform_change,
+                bg=C_SIDEBAR_BG, fg="#FFFFFF",
+                selectcolor=C_SIDEBAR_BG,
+                activebackground=C_SIDEBAR_BG,
+                font=(FONT_FAMILY, FONT_SIZE_SM)
+            ).pack(side="left", padx=(0, 6))
+
+
         # ── Divider ──────────────────────────────────────────────────────────
         tk.Frame(sidebar, bg="#2E2E44", height=1).grid(row=3, column=0, sticky="ew", pady=(12, 4))
 
@@ -553,31 +576,51 @@ class SmartLoggerGUI:
             self.status_var.set("No devices connected — connect via USB and enable ADB")
 
     def on_device_select(self, event):
-        serial = self.device_combo.get()
-        if serial:
-            self.adb.device_serial = serial
-            self._crash_device_label.configure(text=serial)
-            self.status_var.set(f"Device: {serial}")
+        device_id = self.device_combo.get()
+        if device_id:
+            self.adb.set_device(device_id)
+            self._crash_device_label.configure(text=device_id)
+            self.status_var.set(f"Device: {device_id}")
+
+    def _on_platform_change(self):
+        """Hot-swap the DeviceManager + recorder when the user switches platform."""
+        chosen  = self._plat_var.get()
+        current = getattr(self.adb, "platform", "android")
+        if chosen == current:
+            return
+        if chosen == "ios":
+            from src.ios_manager  import IOSManager
+            from src.ios_recorder import IOSRecorder
+            self.adb = IOSManager()
+            if self.video_recorder is not None:
+                self.video_recorder = IOSRecorder(self.adb)
+        else:
+            from src.android_manager import AndroidManager
+            from src.video_recorder  import VideoRecorder
+            from config import Config
+            self.adb = AndroidManager(
+                adb_path=Config.ADB_PATH,
+                device_serial=Config.DEVICE_SERIAL)
+            if self.video_recorder is not None:
+                self.video_recorder = VideoRecorder(adb_manager=self.adb)
+        if self.log_analyzer:
+            self.log_analyzer.adb = self.adb
+        self.root.title(f"SmartLogger — {chosen.capitalize()} QA Tool")
+        self.status_var.set(f"Switched to {chosen.capitalize()} mode")
+        self.refresh_devices()
+
 
     def refresh_packages(self):
+        """Fetch installed apps — works for both Android packages and iOS bundle IDs."""
         def task():
-            self.status_var.set("Fetching installed apps…")
+            self.root.after(0, lambda: self.status_var.set("Fetching installed apps…"))
             try:
-                cmd = [self.adb.adb_path]
-                if self.adb.device_serial:
-                    cmd += ["-s", self.adb.device_serial]
-                cmd += ["shell", "pm", "list", "packages", "-3"]
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-                packages = sorted([
-                    line.replace("package:", "")
-                    for line in result.stdout.strip().split("\n")
-                    if line.startswith("package:")
-                ])
-                self.root.after(0, lambda: self._update_packages(packages))
+                apps = self.adb.list_installed_apps()
+                self.root.after(0, lambda: self._update_packages(apps))
             except Exception as e:
                 self.root.after(0, lambda: self.status_var.set(f"Error fetching apps: {e}"))
-
         threading.Thread(target=task, daemon=True).start()
+
 
     def _update_packages(self, packages):
         self.package_combo['values'] = packages
