@@ -130,17 +130,40 @@ class IOSManager(DeviceManager):
         return sorted(bundles)
 
     def _list_sim_apps(self) -> list:
-        """Return bundle IDs of user apps installed in the selected simulator."""
-        out = self._run(
-            ["xcrun", "simctl", "listapps", self.udid], timeout=15)
-        if not out:
-            return []
-        import json
+        """Return bundle IDs of user apps installed in the selected simulator.
+
+        simctl listapps outputs a GNUstep old-style property list that neither
+        Python's json nor plistlib can parse.  We pipe through macOS's built-in
+        `plutil -convert json` to get proper JSON first.
+        """
         try:
-            data = json.loads(out)
-            return sorted(data.keys())
-        except (json.JSONDecodeError, ValueError):
+            # Step 1: get raw plist text from simctl
+            p1 = subprocess.run(
+                ["xcrun", "simctl", "listapps", self.udid],
+                capture_output=True, timeout=15)
+            if p1.returncode != 0 or not p1.stdout:
+                return []
+
+            # Step 2: convert to JSON via plutil (always available on macOS)
+            p2 = subprocess.run(
+                ["plutil", "-convert", "json", "-o", "-", "-"],
+                input=p1.stdout, capture_output=True, timeout=10)
+            if p2.returncode != 0:
+                return []
+
+            import json
+            data = json.loads(p2.stdout)
+            # Filter to user-installed apps only (ApplicationType == "User")
+            return sorted(
+                k for k, v in data.items()
+                if v.get("ApplicationType") == "User"
+            )
+        except Exception as e:
+            print(f"iOS sim app list error: {e}")
             return []
+
+
+
 
     def get_pid(self, app_id: str) -> str:
         """
