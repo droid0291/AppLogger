@@ -43,7 +43,7 @@ class AndroidManager(DeviceManager):
 
     # ── Shell / command execution ─────────────────────────────────────────────
 
-    def run_command(self, cmd: list) -> str | None:
+    def run_command(self, cmd: list) -> "Optional[str]":
         """Run an ADB command and return stdout."""
         base = [self.adb_path]
         if self.device_serial:

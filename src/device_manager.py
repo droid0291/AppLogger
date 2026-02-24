@@ -23,7 +23,7 @@ class DeviceManager(ABC):
     # ── Shell / command execution ─────────────────────────────────────────────
 
     @abstractmethod
-    def run_command(self, cmd: list) -> str | None:
+    def run_command(self, cmd: list) -> "Optional[str]":
         """
         Run a platform command and return stdout as a string.
         Returns None on failure.

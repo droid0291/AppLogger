@@ -46,7 +46,7 @@ class IOSManager(DeviceManager):
             cmd += ["-u", self.udid]
         return cmd
 
-    def _run(self, cmd: list, timeout: int = 10) -> str | None:
+    def _run(self, cmd: list, timeout: int = 10) -> "Optional[str]":
         """Run an external command and return stdout, or None on failure."""
         try:
             result = subprocess.run(
@@ -99,7 +99,7 @@ class IOSManager(DeviceManager):
 
     # ── Shell / command execution ─────────────────────────────────────────────
 
-    def run_command(self, cmd: list) -> str | None:
+    def run_command(self, cmd: list) -> "Optional[str]":
         """
         Generic command runner. For iOS most operations use dedicated
         libimobiledevice tools, but this handles ad-hoc subprocess needs.

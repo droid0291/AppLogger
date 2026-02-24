@@ -39,7 +39,7 @@ class IOSRecorder:
         else:
             return self._start_device_recording()
 
-    def stop_recording(self) -> str | None:
+    def stop_recording(self) -> "Optional[str]":
         if not self.recording:
             print("No recording in progress")
             return None
@@ -71,7 +71,7 @@ class IOSRecorder:
             print(f"[iOS Sim] Failed to start recording: {e}")
             return False
 
-    def _stop_sim_recording(self) -> str | None:
+    def _stop_sim_recording(self) -> "Optional[str]":
         if self._proc:
             self._proc.terminate()
             try:
@@ -112,7 +112,7 @@ class IOSRecorder:
             print(f"[iOS Real] irecord failed: {e}")
             return False
 
-    def _stop_device_recording(self) -> str | None:
+    def _stop_device_recording(self) -> "Optional[str]":
         if self._proc:
             self._proc.terminate()
             try:
@@ -155,7 +155,7 @@ class IOSRecorder:
         print(f"[iOS Real] Screenshot-stitch recording started (frames → {self._frame_dir})")
         return True
 
-    def _stitch_frames_to_video(self) -> str | None:
+    def _stitch_frames_to_video(self) -> "Optional[str]":
         """Use FFmpeg to stitch PNG frames into MP4."""
         import shutil
         if not shutil.which("ffmpeg"):

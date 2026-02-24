@@ -12,7 +12,7 @@ class LogAnalyzer:
     # ── Log extraction ────────────────────────────────────────────────────────
 
     def extract_logcat(self, output_file: str = "logs/logcat.txt",
-                       filter_level: str = "E") -> str | None:
+                       filter_level: str = "E") -> "Optional[str]":
         """Extract a snapshot of logs from the device."""
         import os
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -31,7 +31,7 @@ class LogAnalyzer:
                 return output_file
         return None
 
-    def extract_crash_logs(self, output_file: str = "logs/crash.txt") -> str | None:
+    def extract_crash_logs(self, output_file: str = "logs/crash.txt") -> "Optional[str]":
         """Extract the last 500 log lines for crash analysis."""
         import os
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -48,7 +48,7 @@ class LogAnalyzer:
 
     # ── AI analysis ───────────────────────────────────────────────────────────
 
-    def analyze_logs_with_ai(self, log_file: str) -> str | None:
+    def analyze_logs_with_ai(self, log_file: str) -> "Optional[str]":
         if not log_file:
             return "No log file provided"
         try:
