@@ -246,13 +246,16 @@ class IOSManager(DeviceManager):
         For real devices: idevicesyslog with optional process filter.
         """
         if self._sim_mode:
-            # Simulator logs go to the host via simctl
             cmd = ["xcrun", "simctl", "spawn", self.udid,
                    "log", "stream", "--style", "syslog"]
             if app_id:
-                # Filter by process (bundle ID short name)
-                short = app_id.split(".")[-1]
-                cmd += ["--predicate", f'process CONTAINS "{short}"']
+                # Xcode replaces hyphens with underscores in executable names.
+                # e.g. com.droid.SmartLoggerTestApp-iOS → SmartLoggerTestApp_iOS
+                short = app_id.split(".")[-1].replace("-", "_")
+                # Match either the process name OR the OSLog subsystem
+                # (the Swift Logger subsystem may differ from the bundle ID)
+                cmd += ["--predicate",
+                        f'process CONTAINS "{short}" OR subsystem == "{app_id}"']
             return cmd
         else:
             # Real device
@@ -261,6 +264,8 @@ class IOSManager(DeviceManager):
                 return []
             cmd = self._base_args("idevicesyslog")
             if app_id:
-                short = app_id.split(".")[-1]
+                # Same normalisation for real devices
+                short = app_id.split(".")[-1].replace("-", "_")
                 cmd += ["--process", short]
             return cmd
+
