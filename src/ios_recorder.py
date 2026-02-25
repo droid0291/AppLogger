@@ -73,16 +73,36 @@ class IOSRecorder:
 
     def _stop_sim_recording(self) -> "Optional[str]":
         if self._proc:
-            self._proc.terminate()
+            # simctl finalizes the MP4 moov atom on SIGINT, NOT SIGTERM.
+            # Using terminate() (SIGTERM) leaves the file without a moov atom
+            # ("moov atom not found"), making it unreadable.
+            import signal
             try:
-                self._proc.wait(timeout=5)
+                self._proc.send_signal(signal.SIGINT)
+            except ProcessLookupError:
+                pass
+            try:
+                self._proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 self._proc.kill()
+                self._proc.wait()
         self.recording = False
-        if os.path.exists(self.current_recording_path):
-            print(f"[iOS Sim] Recording saved → {self.current_recording_path}")
-            return self.current_recording_path
-        print("[iOS Sim] Recording file not found after stop")
+
+        # Poll until the file appears and stops growing (moov atom written)
+        path = self.current_recording_path
+        for _ in range(20):          # up to 10 s in 0.5 s steps
+            if os.path.exists(path) and os.path.getsize(path) > 10_000:
+                prev = os.path.getsize(path)
+                time.sleep(0.5)
+                if os.path.getsize(path) == prev:
+                    break            # file stable → moov written
+            else:
+                time.sleep(0.5)
+
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            print(f"[iOS Sim] Recording saved → {path}")
+            return path
+        print("[iOS Sim] Recording file not found or empty after stop")
         return None
 
     # ─────────────────────────────────────────────────────────────────────────

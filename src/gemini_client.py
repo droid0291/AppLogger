@@ -45,11 +45,34 @@ class GeminiClient:
             file_size = os.path.getsize(video_path)
             print(f"Uploading video: {video_path} ({file_size / 1024:.1f} KB)")
             
-            # Skip if file is too small (likely corrupted)
+            # Skip if file is too small (likely corrupted / no moov atom)
             if file_size < 1000:
                 print(f"Video file too small, skipping upload")
                 return None
-            
+
+            # Transcode to H.264 MP4 before uploading.
+            # xcrun simctl recordVideo may produce a QuickTime file (no moov
+            # atom for SIGTERM-killed recordings).  Gemini rejects everything
+            # that is not a proper H.264 MP4.
+            import shutil, subprocess as _sp
+            ffmpeg = shutil.which("ffmpeg")
+            if ffmpeg:
+                transcoded = video_path.replace(".mp4", "_h264.mp4")
+                r = _sp.run(
+                    [ffmpeg, "-y", "-i", video_path,
+                     "-vcodec", "libx264", "-acodec", "aac",
+                     "-crf", "23", "-preset", "fast",
+                     "-movflags", "+faststart",
+                     transcoded],
+                    capture_output=True, text=True)
+                if r.returncode == 0:
+                    print(f"Transcoded to H.264: {transcoded}")
+                    video_path = transcoded
+                else:
+                    print(f"ffmpeg transcode failed (using original): {r.stderr[-200:]}")
+            else:
+                print("ffmpeg not found — uploading original (may fail if not H.264)")
+
             video_file = genai.upload_file(path=video_path)
             
             print(f"Waiting for video processing...")
@@ -60,7 +83,14 @@ class GeminiClient:
                 video_file = genai.get_file(video_file.name)
             
             if video_file.state.name == "FAILED":
-                print("Video processing failed on Gemini side")
+                error_detail = getattr(video_file, 'error', None)
+                print(f"Video processing failed on Gemini side")
+                print(f"  File: {video_file.name}")
+                print(f"  State: {video_file.state.name}")
+                if error_detail:
+                    print(f"  Error: {error_detail}")
+                else:
+                    print(f"  (No additional error detail from Gemini API)")
                 return None
             
             print(f"Video ready, analyzing...")
