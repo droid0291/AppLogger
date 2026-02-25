@@ -50,28 +50,46 @@ class GeminiClient:
                 print(f"Video file too small, skipping upload")
                 return None
 
-            # Transcode to H.264 MP4 before uploading.
-            # xcrun simctl recordVideo may produce a QuickTime file (no moov
-            # atom for SIGTERM-killed recordings).  Gemini rejects everything
-            # that is not a proper H.264 MP4.
+            # Transcode to H.264 MP4 only when needed.
+            # Android (adb screenrecord) already produces H.264 → skip.
+            # iOS simulator (simctl recordVideo) may be HEVC/QuickTime → transcode.
             import shutil, subprocess as _sp
-            ffmpeg = shutil.which("ffmpeg")
-            if ffmpeg:
-                transcoded = video_path.replace(".mp4", "_h264.mp4")
-                r = _sp.run(
-                    [ffmpeg, "-y", "-i", video_path,
-                     "-vcodec", "libx264", "-acodec", "aac",
-                     "-crf", "23", "-preset", "fast",
-                     "-movflags", "+faststart",
-                     transcoded],
+            ffmpeg  = shutil.which("ffmpeg")
+            ffprobe = shutil.which("ffprobe")
+            needs_transcode = False
+            if ffprobe:
+                probe = _sp.run(
+                    [ffprobe, "-v", "error", "-select_streams", "v:0",
+                     "-show_entries", "stream=codec_name",
+                     "-of", "default=noprint_wrappers=1:nokey=1", video_path],
                     capture_output=True, text=True)
-                if r.returncode == 0:
-                    print(f"Transcoded to H.264: {transcoded}")
-                    video_path = transcoded
-                else:
-                    print(f"ffmpeg transcode failed (using original): {r.stderr[-200:]}")
+                codec = probe.stdout.strip().lower()
+                print(f"Video codec detected: '{codec}'")
+                needs_transcode = codec not in ("h264", "avc")
             else:
-                print("ffmpeg not found — uploading original (may fail if not H.264)")
+                # No ffprobe — only transcode files with 'ios' in the path
+                needs_transcode = "ios" in video_path.lower()
+
+            if needs_transcode:
+                if ffmpeg:
+                    transcoded = video_path.replace(".mp4", "_h264.mp4")
+                    r = _sp.run(
+                        [ffmpeg, "-y", "-i", video_path,
+                         "-vcodec", "libx264", "-acodec", "aac",
+                         "-crf", "23", "-preset", "fast",
+                         "-movflags", "+faststart",
+                         transcoded],
+                        capture_output=True, text=True)
+                    if r.returncode == 0:
+                        print(f"Transcoded to H.264: {transcoded}")
+                        video_path = transcoded
+                    else:
+                        print(f"ffmpeg transcode failed (using original): {r.stderr[-200:]}")
+                else:
+                    print("ffmpeg not found — uploading original (may be rejected by Gemini)")
+            else:
+                print("Video is already H.264 — skipping transcode")
+
 
             video_file = genai.upload_file(path=video_path)
             
