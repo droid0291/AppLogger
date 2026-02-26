@@ -32,13 +32,16 @@ class AndroidManager(DeviceManager):
 
     def get_connected_devices(self) -> list:
         """Return list of connected ADB device serials."""
+        print("[ADB] Fetching connected devices...")
         output = self.run_command(["devices"])
         if not output:
-            return []
+             print("[ADB] Run command returned no output for devices.")
+             return []
         devices = []
         for line in output.split("\n")[1:]:
             if "\tdevice" in line:
                 devices.append(line.split("\t")[0])
+        print(f"[ADB] Found {len(devices)} connected device(s): {devices}")
         return devices
 
     # ── Shell / command execution ─────────────────────────────────────────────
@@ -60,14 +63,43 @@ class AndroidManager(DeviceManager):
 
     def list_installed_apps(self) -> list:
         """Return third-party package names."""
+        print(f"[ADB] Fetching installed apps for device {self.device_serial or 'default'}...")
         out = self.run_command(["shell", "pm", "list", "packages", "-3"])
         if not out:
+            print("[ADB] Run command returned no output for packages.")
             return []
         packages = []
         for line in out.splitlines():
             if line.startswith("package:"):
                 packages.append(line[len("package:"):].strip())
-        return sorted(packages)
+        
+        packages = sorted(packages)
+        print(f"[ADB] Found {len(packages)} installed packages.")
+        
+        fg_app = self.get_foreground_app()
+        if fg_app:
+            print(f"[ADB] Foreground app detected: {fg_app}")
+            if fg_app in packages:
+                packages.remove(fg_app)
+            packages.insert(0, fg_app)
+        else:
+            print("[ADB] No foreground app detected.")
+            
+        return packages
+
+    def get_foreground_app(self) -> str:
+        """Return the package name of the app currently in the foreground."""
+        print("[ADB] Determining foreground application...")
+        out = self.run_command(["shell", "dumpsys", "window", "windows"])
+        if not out:
+            return ""
+        for line in out.splitlines():
+            if "mCurrentFocus" in line or "mFocusedApp" in line:
+                import re
+                match = re.search(r' u0 ([a-zA-Z0-9_.]+)/', line)
+                if match:
+                    return match.group(1)
+        return ""
 
     def get_pid(self, app_id: str) -> str:
         """Return PID of the running package, or ''."""

@@ -566,7 +566,16 @@ class SmartLoggerGUI:
     # ─────────────────────────────────────────────────────────────────────────
 
     def refresh_devices(self):
-        devices = self.adb.get_connected_devices()
+        def task():
+            self.root.after(0, lambda: self.status_var.set("Fetching devices…"))
+            try:
+                devices = self.adb.get_connected_devices()
+                self.root.after(0, lambda: self._update_devices(devices))
+            except Exception as e:
+                self.root.after(0, lambda: self.status_var.set(f"❌ Error fetching devices: {e}"))
+        threading.Thread(target=task, daemon=True).start()
+
+    def _update_devices(self, devices):
         self._device_combo_widget['values'] = devices
         if devices:
             self._device_combo_widget.current(0)
@@ -794,23 +803,26 @@ class SmartLoggerGUI:
     def _start_logcat(self, selected_package=""):
         try:
             os.makedirs("logs", exist_ok=True)
-
-            # Delegate full command construction to DeviceManager
-            # For Android: adb logcat [--pid=N]
-            # For iOS:     xcrun simctl spawn … log stream  OR  idevicesyslog
             platform = getattr(self.adb, "platform", "android")
 
-            if platform == "android":
-                # Clear existing device logs first
-                clear_cmd = self.adb.logcat_command()[:-0]  # full base cmd
-                import copy; base = copy.copy(self.adb.logcat_command())
-                # Replace last element to build clear cmd
-                clear_cmd = [self.adb.adb_path]
-                if getattr(self.adb, "device_serial", None):
-                    clear_cmd += ["-s", self.adb.device_serial]
-                clear_cmd += ["logcat", "-c"]
-                subprocess.run(clear_cmd, timeout=5)
+            def clear_and_start():
+                if platform == "android":
+                    # Clear existing device logs first
+                    clear_cmd = [self.adb.adb_path]
+                    if getattr(self.adb, "device_serial", None):
+                        clear_cmd += ["-s", self.adb.device_serial]
+                    clear_cmd += ["logcat", "-c"]
+                    subprocess.run(clear_cmd, timeout=5)
 
+                self.root.after(0, lambda: self._finalize_start_logcat(platform, selected_package))
+
+            threading.Thread(target=clear_and_start, daemon=True).start()
+
+        except Exception as e:
+            self._append_log(f"Logcat error: {e}\n", tag="error")
+
+    def _finalize_start_logcat(self, platform, selected_package):
+        try:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             self.current_log_file = f"logs/recording_{timestamp}.txt"
             self._logcat_package = selected_package
@@ -828,8 +840,8 @@ class SmartLoggerGUI:
                     full_cmd = self.adb.logcat_command(app_id=selected_package)
                     self._logcat_app_pid = None
                     self._append_log(
-                        f"\u26a0 App '{selected_package}' not running.\n"
-                        f"  Open the app \u2014 logs auto-filter when PID detected.\n",
+                        f"⚠ App '{selected_package}' not running.\n"
+                        f"  Open the app — logs auto-filter when PID detected.\n",
                         tag="warn")
                     threading.Thread(
                         target=self._wait_for_pid,
@@ -845,7 +857,7 @@ class SmartLoggerGUI:
                         f"── iOS log stream for '{selected_package}' ──\n", tag="ok")
 
             if not full_cmd:
-                self._append_log("\u274c Log tool not available. Check brew install libimobiledevice\n",
+                self._append_log("❌ Log tool not available. Check brew install libimobiledevice\n",
                                  tag="error")
                 return
 
