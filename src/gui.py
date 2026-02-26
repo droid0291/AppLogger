@@ -250,6 +250,7 @@ class SmartLoggerGUI:
         self.package_combo = ttk.Combobox(sel_frame, textvariable=self.package_var,
             style="Selector.TCombobox", state="readonly", height=12)
         self.package_combo.grid(row=4, column=0, sticky="ew", pady=(2, 4))
+        self.package_combo.bind("<<ComboboxSelected>>", self.on_package_select)
 
         ttk.Button(sel_frame, text="↺  Refresh Apps", style="Ghost.TButton",
             command=self.refresh_packages).grid(row=5, column=0, sticky="ew")
@@ -590,6 +591,13 @@ class SmartLoggerGUI:
             self.adb.set_device(device_id)
             self._crash_device_label.configure(text=device_id)
             self.status_var.set(f"Device: {device_id}")
+
+    def on_package_select(self, event):
+        app_id = self.package_combo.get()
+        if app_id:
+            self._crash_app_label.configure(text=app_id)
+            self._log_filter_label.configure(text=f"filter: {app_id}")
+            self.status_var.set(f"Selected App: {app_id}")
 
     def _on_platform_change(self):
         """Hot-swap the DeviceManager + recorder when the user switches platform."""

@@ -90,15 +90,27 @@ class AndroidManager(DeviceManager):
     def get_foreground_app(self) -> str:
         """Return the package name of the app currently in the foreground."""
         print("[ADB] Determining foreground application...")
+        import re
+        
+        # Method 1: dumpsys window
         out = self.run_command(["shell", "dumpsys", "window", "windows"])
-        if not out:
-            return ""
-        for line in out.splitlines():
-            if "mCurrentFocus" in line or "mFocusedApp" in line:
-                import re
-                match = re.search(r' u0 ([a-zA-Z0-9_.]+)/', line)
-                if match:
-                    return match.group(1)
+        if out:
+            for line in out.splitlines():
+                if "mCurrentFocus" in line or "mFocusedApp" in line:
+                    match = re.search(r' u0 ([a-zA-Z0-9_.]+)/', line)
+                    if match:
+                        return match.group(1)
+                        
+        # Method 2: dumpsys activity (fallback for newer Android versions)
+        print("[ADB] Falling back to dumpsys activity...")
+        out2 = self.run_command(["shell", "dumpsys", "activity", "activities"])
+        if out2:
+            for line in out2.splitlines():
+                if "mResumedActivity" in line or "topResumedActivity" in line:
+                    match = re.search(r' u0 ([a-zA-Z0-9_.]+)/', line)
+                    if match:
+                        return match.group(1)
+        
         return ""
 
     def get_pid(self, app_id: str) -> str:
