@@ -76,7 +76,7 @@ Make them concise and actionable. Output only the steps, nothing else."""
         
         try:
             import google.generativeai as genai
-            model = genai.GenerativeModel('gemini-pro')
+            model = genai.GenerativeModel('models/gemini-2.0-flash')
             response = model.generate_content(prompt)
             return response.text
         except Exception as e:
