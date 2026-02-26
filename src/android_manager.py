@@ -141,7 +141,7 @@ class AndroidManager(DeviceManager):
 
     # ── Log streaming ─────────────────────────────────────────────────────────
 
-    def logcat_command(self, app_id: str = "", pid: str = "") -> list:
+    def logcat_command(self, app_id: str = "", pid: str = "", min_level: str = "") -> list:
         """Return the adb logcat command to stream logs."""
         base = [self.adb_path]
         if self.device_serial:
@@ -149,6 +149,8 @@ class AndroidManager(DeviceManager):
         cmd = base + ["logcat", "-v", "threadtime"]
         if pid:
             cmd += [f"--pid={pid}"]
+        if min_level:
+            cmd += [f"*:{min_level}"]
         return cmd
 
     # ── Legacy helpers (kept for existing callers) ────────────────────────────

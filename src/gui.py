@@ -839,13 +839,13 @@ class SmartLoggerGUI:
             if platform == "android" and selected_package:
                 app_pid = self.adb.get_pid(selected_package)
                 if app_pid:
-                    full_cmd = self.adb.logcat_command(app_id=selected_package, pid=app_pid)
+                    full_cmd = self.adb.logcat_command(app_id=selected_package, pid=app_pid, min_level="E")
                     self._logcat_app_pid = app_pid
                     self._append_log(
-                        f"── Filtering logs for {selected_package} (PID: {app_pid}) ──\n",
+                        f"── Filtering logs for {selected_package} (PID: {app_pid}) [Errors Only] ──\n",
                         tag="ok")
                 else:
-                    full_cmd = self.adb.logcat_command(app_id=selected_package)
+                    full_cmd = self.adb.logcat_command(app_id=selected_package, min_level="E")
                     self._logcat_app_pid = None
                     self._append_log(
                         f"⚠ App '{selected_package}' not running.\n"
@@ -856,10 +856,10 @@ class SmartLoggerGUI:
                         args=(selected_package,),
                         daemon=True).start()
             else:
-                full_cmd = self.adb.logcat_command(app_id=selected_package)
+                full_cmd = self.adb.logcat_command(app_id=selected_package, min_level="E")
                 self._logcat_app_pid = None
                 if not selected_package:
-                    self._append_log("── No app filter ── capturing all logs ──\n", tag="dim")
+                    self._append_log("── No app filter ── capturing all logs [Errors Only] ──\n", tag="dim")
                 else:
                     self._append_log(
                         f"── iOS log stream for '{selected_package}' ──\n", tag="ok")
@@ -898,7 +898,7 @@ class SmartLoggerGUI:
                     self.log_process.terminate()
                 time.sleep(0.5)
 
-                new_cmd = self.adb.logcat_command(app_id=package, pid=pid)
+                new_cmd = self.adb.logcat_command(app_id=package, pid=pid, min_level="E")
                 try:
                     self.log_process = subprocess.Popen(
                         new_cmd,
