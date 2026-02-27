@@ -6,6 +6,7 @@ import os
 import datetime
 import subprocess
 import webbrowser
+import queue
 
 # ── Colour tokens ────────────────────────────────────────────────────────────
 C_SIDEBAR_BG    = "#2C3E50"   # professional dark slate
@@ -58,6 +59,13 @@ class SmartLoggerGUI:
         self._active_tab        = None
         self._tab_buttons       = {}
         self._tab_frames        = {}
+
+        # M1/M2/M4 Apple Silicon fix:
+        # Background threads cannot predictably wake the NSApplication runloop in Tkinter.
+        # Instead, background threads drop generic lambdas here, and the main thread polls it.
+        self.ui_queue = queue.Queue()
+        self._process_ui_queue()
+
         self._session_timer     = None
         self._elapsed_seconds   = 0
         self._blink_dot_state   = False
@@ -572,16 +580,27 @@ class SmartLoggerGUI:
     # Device / App selectors
     # ─────────────────────────────────────────────────────────────────────────
 
+    def _process_ui_queue(self):
+        """Poll the queue for UI updates to bypass Apple Silicon threading sleep bug."""
+        try:
+            while True:
+                task = self.ui_queue.get_nowait()
+                task()
+        except queue.Empty:
+            pass
+        finally:
+            self.root.after(100, self._process_ui_queue)
+
     def refresh_devices(self):
         def task():
-            self.root.after(0, lambda: self._show_progress("Fetching devices…"))
+            self.ui_queue.put(lambda: self._show_progress("Fetching devices…"))
             try:
                 devices = self.adb.get_connected_devices()
-                self.root.after(0, lambda: self._update_devices(devices))
+                self.ui_queue.put(lambda d=devices: self._update_devices(d))
             except Exception as e:
-                self.root.after(0, lambda: self.status_var.set(f"❌ Error fetching devices: {e}"))
+                self.ui_queue.put(lambda err=e: self.status_var.set(f"❌ Error fetching devices: {err}"))
             finally:
-                self.root.after(0, self._hide_progress)
+                self.ui_queue.put(self._hide_progress)
         threading.Thread(target=task, daemon=True).start()
 
     def _update_devices(self, devices):
@@ -649,15 +668,15 @@ class SmartLoggerGUI:
         self._is_refreshing_apps = True
 
         def task():
-            self.root.after(0, lambda: self._show_progress("Fetching installed apps…"))
+            self.ui_queue.put(lambda: self._show_progress("Fetching installed apps…"))
             try:
                 apps = self.adb.list_installed_apps()
-                self.root.after(0, lambda: self._update_packages(apps))
+                self.ui_queue.put(lambda a=apps: self._update_packages(a))
             except Exception as e:
-                self.root.after(0, lambda: self.status_var.set(f"❌ Error fetching apps: {e}"))
+                self.ui_queue.put(lambda err=e: self.status_var.set(f"❌ Error fetching apps: {err}"))
             finally:
                 self._is_refreshing_apps = False
-                self.root.after(0, self._hide_progress)
+                self.ui_queue.put(self._hide_progress)
                 
         threading.Thread(target=task, daemon=True).start()
 
@@ -839,7 +858,7 @@ class SmartLoggerGUI:
                     clear_cmd += ["logcat", "-c"]
                     subprocess.run(clear_cmd, timeout=5)
 
-                self.root.after(0, lambda: self._finalize_start_logcat(platform, selected_package))
+                self.ui_queue.put(lambda: self._finalize_start_logcat(platform, selected_package))
 
             threading.Thread(target=clear_and_start, daemon=True).start()
 
@@ -908,7 +927,7 @@ class SmartLoggerGUI:
             pid = self.adb.get_pid(package)
             if pid:
                 self._logcat_app_pid = pid
-                self.root.after(0, lambda p=pid: self._append_log(
+                self.ui_queue.put(lambda p=pid: self._append_log(
                     f"── App detected (PID: {p}) — filtering logs for {package} ──\n",
                     tag="ok"))
                 if self.log_process:
@@ -926,7 +945,7 @@ class SmartLoggerGUI:
                     )
                     threading.Thread(target=self._stream_logcat, daemon=True).start()
                 except Exception as e:
-                    self.root.after(0, lambda: self._append_log(
+                    self.ui_queue.put(lambda: self._append_log(
                         f"Failed to restart filtered logcat: {e}\n", tag="error"))
                 return
 
@@ -949,15 +968,15 @@ class SmartLoggerGUI:
                     if pid and f" {pid} " not in line and f"({pid})" not in line:
                         continue
 
-                if self.log_file_handle:
+                if getattr(self, "log_file_handle", None):
                     self.log_file_handle.write(line)
 
                 tag = self._classify_log_line(line)
-                self.root.after(0, lambda l=line, t=tag: self._append_log(l, tag=t))
+                self.ui_queue.put(lambda l=line, t=tag: self._append_log(l, tag=t))
 
                 line_count += 1
                 if line_count > MAX_LINES:
-                    self.root.after(0, self._trim_logcat)
+                    self.ui_queue.put(self._trim_logcat)
                     line_count = 0
         except Exception:
             pass
