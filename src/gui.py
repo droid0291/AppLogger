@@ -568,12 +568,14 @@ class SmartLoggerGUI:
 
     def refresh_devices(self):
         def task():
-            self.root.after(0, lambda: self.status_var.set("Fetching devices…"))
+            self.root.after(0, lambda: self._show_progress("Fetching devices…"))
             try:
                 devices = self.adb.get_connected_devices()
                 self.root.after(0, lambda: self._update_devices(devices))
             except Exception as e:
                 self.root.after(0, lambda: self.status_var.set(f"❌ Error fetching devices: {e}"))
+            finally:
+                self.root.after(0, self._hide_progress)
         threading.Thread(target=task, daemon=True).start()
 
     def _update_devices(self, devices):
@@ -641,7 +643,7 @@ class SmartLoggerGUI:
         self._is_refreshing_apps = True
 
         def task():
-            self.root.after(0, lambda: self.status_var.set("Fetching installed apps…"))
+            self.root.after(0, lambda: self._show_progress("Fetching installed apps…"))
             try:
                 apps = self.adb.list_installed_apps()
                 self.root.after(0, lambda: self._update_packages(apps))
@@ -649,6 +651,7 @@ class SmartLoggerGUI:
                 self.root.after(0, lambda: self.status_var.set(f"❌ Error fetching apps: {e}"))
             finally:
                 self._is_refreshing_apps = False
+                self.root.after(0, self._hide_progress)
                 
         threading.Thread(target=task, daemon=True).start()
 
