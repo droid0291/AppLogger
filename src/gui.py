@@ -629,11 +629,16 @@ class SmartLoggerGUI:
 
     def refresh_packages(self):
         """Fetch installed apps — works for both Android packages and iOS bundle IDs."""
-        # Guard: must have a device selected
+        # Guard against concurrent refreshes
+        if getattr(self, "_is_refreshing_apps", False):
+            return
+            
         device_id = self.device_combo.get()
         if not device_id:
             self.status_var.set("⚠ Select a device first, then Refresh Apps")
             return
+
+        self._is_refreshing_apps = True
 
         def task():
             self.root.after(0, lambda: self.status_var.set("Fetching installed apps…"))
@@ -642,6 +647,9 @@ class SmartLoggerGUI:
                 self.root.after(0, lambda: self._update_packages(apps))
             except Exception as e:
                 self.root.after(0, lambda: self.status_var.set(f"❌ Error fetching apps: {e}"))
+            finally:
+                self._is_refreshing_apps = False
+                
         threading.Thread(target=task, daemon=True).start()
 
 

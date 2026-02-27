@@ -46,15 +46,18 @@ class AndroidManager(DeviceManager):
 
     # ── Shell / command execution ─────────────────────────────────────────────
 
-    def run_command(self, cmd: list) -> "Optional[str]":
+    def run_command(self, cmd: list, timeout: int = 10) -> "Optional[str]":
         """Run an ADB command and return stdout."""
         base = [self.adb_path]
         if self.device_serial:
             base += ["-s", self.device_serial]
         try:
             result = subprocess.run(
-                base + cmd, capture_output=True, text=True, check=True)
+                base + cmd, capture_output=True, text=True, check=True, timeout=timeout)
             return result.stdout.strip()
+        except subprocess.TimeoutExpired:
+            print(f"ADB Error: command {' '.join(cmd)} timed out after {timeout}s")
+            return None
         except subprocess.CalledProcessError as e:
             print(f"ADB Error: {e.stderr.strip()}")
             return None
