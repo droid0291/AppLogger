@@ -317,8 +317,10 @@ class SmartLoggerGUI:
         self._tab_frames["ui"]      = self._build_placeholder_tab(self._main_container, "🎨", "Report UI Bug", "Coming soon")
         self._tab_frames["verify"]  = self._build_placeholder_tab(self._main_container, "✅", "Verify Content", "Coming soon")
 
+        # Configure all frames to fill the cell, but do NOT map them all yet
         for frame in self._tab_frames.values():
-            frame.grid(row=0, column=0, sticky="nsew")
+            frame.grid_rowconfigure(0, weight=1)
+            frame.grid_columnconfigure(0, weight=1)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Status bar
@@ -360,9 +362,13 @@ class SmartLoggerGUI:
         self._active_tab = key
         for k, btn in self._tab_buttons.items():
             btn.configure(style="TabActive.TButton" if k == key else "Tab.TButton")
+        
+        # Unmounting hidden tabs using grid_remove fixes macOS render lag
         for k, frame in self._tab_frames.items():
             if k == key:
-                frame.tkraise()
+                frame.grid(row=0, column=0, sticky="nsew")
+            else:
+                frame.grid_remove()
 
     # ─────────────────────────────────────────────────────────────────────────
     # ── TAB: Report Crash ────────────────────────────────────────────────────
