@@ -64,6 +64,10 @@ class SmartLoggerGUI:
         self._blink_job         = None
         self._last_jira_url     = None
 
+        # ── UI Bug tab state ─────────────────────────────────────────────────
+        self._ui_screenshots    = []      # list of (path, PhotoImage)
+        self._ui_steps_session  = False   # True while auto-recording steps
+
         self.root.title("SmartLogger")
         self.root.geometry("1120x700")
         self.root.minsize(900, 600)
@@ -314,7 +318,7 @@ class SmartLoggerGUI:
         # Build all tab frames (only one visible at a time)
         self._tab_frames["crash"]   = self._build_crash_tab(self._main_container)
         self._tab_frames["network"] = self._build_placeholder_tab(self._main_container, "🌐", "Report Network Failure", "Coming soon")
-        self._tab_frames["ui"]      = self._build_placeholder_tab(self._main_container, "🎨", "Report UI Bug", "Coming soon")
+        self._tab_frames["ui"]      = self._build_ui_bug_tab(self._main_container)
         self._tab_frames["verify"]  = self._build_placeholder_tab(self._main_container, "✅", "Verify Content", "Coming soon")
 
         for frame in self._tab_frames.values():
@@ -561,6 +565,544 @@ class SmartLoggerGUI:
             bg=C_MAIN_BG, fg=C_TEXT_SEC).pack(pady=(4, 0))
 
         return frame
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # ── TAB: Report UI Bug ───────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _build_ui_bug_tab(self, parent):
+        """Full Report UI Bug tab — screenshot strip + structured form."""
+        frame = ttk.Frame(parent, style="Main.TFrame")
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(2, weight=1)   # form card expands
+
+        # ── Page header ──────────────────────────────────────────────────────
+        header = ttk.Frame(frame, style="Main.TFrame", padding=(28, 24, 28, 0))
+        header.grid(row=0, column=0, sticky="ew")
+
+        tk.Label(header,
+            text="Report UI Bug",
+            font=(FONT_FAMILY, FONT_SIZE_XL, "bold"),
+            bg=C_MAIN_BG, fg=C_TEXT_PRIMARY).pack(anchor="w")
+        tk.Label(header,
+            text="Capture screenshots from the running device, then describe the issue.",
+            font=(FONT_FAMILY, FONT_SIZE_SM),
+            bg=C_MAIN_BG, fg=C_TEXT_SEC).pack(anchor="w", pady=(2, 0))
+
+        # ── Screenshot strip ─────────────────────────────────────────────────
+        ss_card = tk.Frame(frame, bg=C_CARD_BG,
+            highlightbackground=C_BORDER, highlightthickness=1)
+        ss_card.grid(row=1, column=0, sticky="ew", padx=28, pady=(16, 0))
+
+        ss_top = tk.Frame(ss_card, bg=C_CARD_BG)
+        ss_top.pack(fill="x", padx=14, pady=(10, 6))
+
+        tk.Label(ss_top, text="Screenshots",
+            font=(FONT_FAMILY, FONT_SIZE_SM, "bold"),
+            bg=C_CARD_BG, fg=C_TEXT_PRIMARY).pack(side="left")
+
+        self._ui_ss_counter = tk.Label(ss_top, text="0 / 8",
+            font=(FONT_FAMILY, FONT_SIZE_SM - 1),
+            bg=C_CARD_BG, fg=C_TEXT_SEC)
+        self._ui_ss_counter.pack(side="left", padx=(8, 0))
+
+        ttk.Button(ss_top,
+            text="📷  Capture Screenshot",
+            style="Ghost.TButton",
+            command=self._ui_capture_screenshot).pack(side="right")
+
+        # Horizontally scrollable thumbnail row
+        ss_scroll_frame = tk.Frame(ss_card, bg=C_CARD_BG)
+        ss_scroll_frame.pack(fill="x", padx=14, pady=(0, 10))
+
+        ss_canvas = tk.Canvas(ss_scroll_frame, bg=C_CARD_BG, height=100,
+            highlightthickness=0)
+        ss_scrollbar = ttk.Scrollbar(ss_scroll_frame, orient="horizontal",
+            command=ss_canvas.xview)
+        ss_canvas.configure(xscrollcommand=ss_scrollbar.set)
+        self._ui_thumb_inner = tk.Frame(ss_canvas, bg=C_CARD_BG)
+        self._ui_thumb_window = ss_canvas.create_window(
+            (0, 0), window=self._ui_thumb_inner, anchor="nw")
+
+        def _on_thumb_configure(e):
+            ss_canvas.configure(scrollregion=ss_canvas.bbox("all"))
+        self._ui_thumb_inner.bind("<Configure>", _on_thumb_configure)
+
+        ss_canvas.pack(side="top", fill="x", expand=True)
+        ss_scrollbar.pack(side="top", fill="x")
+
+        # Placeholder label when no screenshots yet
+        self._ui_no_ss_label = tk.Label(self._ui_thumb_inner,
+            text="No screenshots captured yet",
+            font=(FONT_FAMILY, FONT_SIZE_SM - 1),
+            bg=C_CARD_BG, fg=C_TEXT_SEC)
+        self._ui_no_ss_label.pack(pady=28)
+
+        # ── Bug details form card ─────────────────────────────────────────────
+        form_outer = tk.Frame(frame, bg=C_CARD_BG,
+            highlightbackground=C_BORDER, highlightthickness=1)
+        form_outer.grid(row=2, column=0, sticky="nsew", padx=28, pady=12)
+        form_outer.columnconfigure(0, weight=1)
+        form_outer.rowconfigure(0, weight=1)
+
+        # Make form scrollable
+        form_canvas = tk.Canvas(form_outer, bg=C_CARD_BG, highlightthickness=0)
+        form_scroll = ttk.Scrollbar(form_outer, orient="vertical",
+            command=form_canvas.yview)
+        form_canvas.configure(yscrollcommand=form_scroll.set)
+        form_canvas.grid(row=0, column=0, sticky="nsew")
+        form_scroll.grid(row=0, column=1, sticky="ns")
+        form_outer.columnconfigure(0, weight=1)
+
+        form_inner = tk.Frame(form_canvas, bg=C_CARD_BG)
+        form_canvas_window = form_canvas.create_window(
+            (0, 0), window=form_inner, anchor="nw")
+
+        def _on_form_configure(e):
+            form_canvas.configure(scrollregion=form_canvas.bbox("all"))
+            form_canvas.itemconfig(form_canvas_window, width=form_canvas.winfo_width())
+        form_inner.bind("<Configure>", _on_form_configure)
+        form_canvas.bind("<Configure>",
+            lambda e: form_canvas.itemconfig(form_canvas_window,
+                                             width=e.width))
+
+        def _field_label(text, required=True):
+            row = tk.Frame(form_inner, bg=C_CARD_BG)
+            row.pack(fill="x", padx=16, pady=(12, 2))
+            tk.Label(row, text=text,
+                font=(FONT_FAMILY, FONT_SIZE_SM, "bold"),
+                bg=C_CARD_BG, fg=C_TEXT_PRIMARY).pack(side="left")
+            if required:
+                tk.Label(row, text=" *",
+                    font=(FONT_FAMILY, FONT_SIZE_SM, "bold"),
+                    bg=C_CARD_BG, fg=C_DANGER).pack(side="left")
+
+        # Expected Result + Actual Result — side by side
+        ea_row = tk.Frame(form_inner, bg=C_CARD_BG)
+        ea_row.pack(fill="x", padx=16, pady=(12, 0))
+        ea_row.columnconfigure(0, weight=1)
+        ea_row.columnconfigure(1, weight=1)
+
+        # Left column — Expected
+        exp_col = tk.Frame(ea_row, bg=C_CARD_BG)
+        exp_col.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+
+        exp_hdr = tk.Frame(exp_col, bg=C_CARD_BG)
+        exp_hdr.pack(fill="x", pady=(0, 2))
+        tk.Label(exp_hdr, text="Expected Result",
+            font=(FONT_FAMILY, FONT_SIZE_SM, "bold"),
+            bg=C_CARD_BG, fg=C_TEXT_PRIMARY).pack(side="left")
+        tk.Label(exp_hdr, text=" *",
+            font=(FONT_FAMILY, FONT_SIZE_SM, "bold"),
+            bg=C_CARD_BG, fg=C_DANGER).pack(side="left")
+
+        self._ui_expected = scrolledtext.ScrolledText(exp_col,
+            wrap=tk.WORD, height=4,
+            font=(FONT_FAMILY, FONT_SIZE_SM),
+            bg="#FAFAFA", fg=C_TEXT_PRIMARY,
+            relief="flat", bd=0,
+            highlightbackground=C_BORDER, highlightthickness=1,
+            padx=8, pady=6)
+        self._ui_expected.pack(fill="both", expand=True)
+
+        # Right column — Actual
+        act_col = tk.Frame(ea_row, bg=C_CARD_BG)
+        act_col.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+
+        act_hdr = tk.Frame(act_col, bg=C_CARD_BG)
+        act_hdr.pack(fill="x", pady=(0, 2))
+        tk.Label(act_hdr, text="Actual Result",
+            font=(FONT_FAMILY, FONT_SIZE_SM, "bold"),
+            bg=C_CARD_BG, fg=C_TEXT_PRIMARY).pack(side="left")
+        tk.Label(act_hdr, text=" *",
+            font=(FONT_FAMILY, FONT_SIZE_SM, "bold"),
+            bg=C_CARD_BG, fg=C_DANGER).pack(side="left")
+
+        self._ui_actual = scrolledtext.ScrolledText(act_col,
+            wrap=tk.WORD, height=4,
+            font=(FONT_FAMILY, FONT_SIZE_SM),
+            bg="#FAFAFA", fg=C_TEXT_PRIMARY,
+            relief="flat", bd=0,
+            highlightbackground=C_BORDER, highlightthickness=1,
+            padx=8, pady=6)
+        self._ui_actual.pack(fill="both", expand=True)
+
+        # Steps to Reproduce
+        _field_label("Steps to Reproduce")
+        self._ui_steps_text = scrolledtext.ScrolledText(form_inner,
+            wrap=tk.WORD, height=4,
+            font=(FONT_FAMILY, FONT_SIZE_SM),
+            bg="#FAFAFA", fg=C_TEXT_PRIMARY,
+            relief="flat", bd=0,
+            highlightbackground=C_BORDER, highlightthickness=1,
+            padx=8, pady=6)
+        self._ui_steps_text.pack(fill="x", padx=16)
+
+        # Steps mode toggle
+        steps_mode_row = tk.Frame(form_inner, bg=C_CARD_BG)
+        steps_mode_row.pack(fill="x", padx=16, pady=(4, 0))
+
+        self._ui_steps_mode = tk.StringVar(value="manual")
+
+        tk.Radiobutton(steps_mode_row, text="Enter manually",
+            variable=self._ui_steps_mode, value="manual",
+            command=self._ui_on_steps_mode_change,
+            bg=C_CARD_BG, fg=C_TEXT_PRIMARY,
+            selectcolor=C_CARD_BG, activebackground=C_CARD_BG,
+            font=(FONT_FAMILY, FONT_SIZE_SM)
+        ).pack(side="left")
+
+        tk.Radiobutton(steps_mode_row, text="Start session",
+            variable=self._ui_steps_mode, value="session",
+            command=self._ui_on_steps_mode_change,
+            bg=C_CARD_BG, fg=C_TEXT_PRIMARY,
+            selectcolor=C_CARD_BG, activebackground=C_CARD_BG,
+            font=(FONT_FAMILY, FONT_SIZE_SM)
+        ).pack(side="left", padx=(12, 0))
+
+        self._ui_session_btn = ttk.Button(steps_mode_row,
+            text="▶  Start",
+            style="Ghost.TButton",
+            command=self._ui_toggle_steps_session)
+        self._ui_session_btn.pack(side="left", padx=(10, 0))
+        self._ui_session_btn.pack_forget()   # hidden in manual mode
+
+        self._ui_session_status = tk.Label(steps_mode_row, text="",
+            font=(FONT_FAMILY, FONT_SIZE_SM - 1),
+            bg=C_CARD_BG, fg=C_TEXT_SEC)
+        self._ui_session_status.pack(side="left", padx=(8, 0))
+
+        # "Generate AI assisted steps" button — shown only after session stops
+        self._ui_gen_steps_btn = ttk.Button(steps_mode_row,
+            text="✨  Generate AI assisted steps",
+            style="Ghost.TButton",
+            command=self._ui_generate_ai_steps)
+        self._ui_gen_steps_btn.pack(side="left", padx=(10, 0))
+        self._ui_gen_steps_btn.pack_forget()   # hidden until session ends
+
+        # Bug Summary (optional)
+        _field_label("Bug Summary", required=False)
+        tk.Label(form_inner,
+            text="Optional — a short one-line title for this bug",
+            font=(FONT_FAMILY, FONT_SIZE_SM - 1),
+            bg=C_CARD_BG, fg=C_TEXT_SEC).pack(anchor="w", padx=16)
+        self._ui_summary_var = tk.StringVar()
+        tk.Entry(form_inner,
+            textvariable=self._ui_summary_var,
+            font=(FONT_FAMILY, FONT_SIZE_SM),
+            bg="#FAFAFA", fg=C_TEXT_PRIMARY,
+            relief="flat", bd=0,
+            highlightbackground=C_BORDER, highlightthickness=1
+        ).pack(fill="x", padx=16, pady=(4, 16), ipady=6)
+
+        # ── Action bar ───────────────────────────────────────────────────────
+        action_bar = tk.Frame(frame, bg=C_MAIN_BG)
+        action_bar.grid(row=3, column=0, sticky="ew", padx=28, pady=(0, 16))
+
+        ttk.Button(action_bar,
+            text="📋  Submit Bug Report",
+            style="Primary.TButton",
+            command=self._ui_submit_bug_report).pack(side="left")
+
+        ttk.Button(action_bar,
+            text="🗑  Clear",
+            style="Ghost.TButton",
+            command=self._ui_clear_form).pack(side="left", padx=(10, 0))
+
+        # Post-submit Jira link (hidden until a ticket is filed)
+        self._ui_jira_link_label = tk.Label(action_bar, text="",
+            font=(FONT_FAMILY, FONT_SIZE_SM, "underline"),
+            bg=C_MAIN_BG, fg=C_ACCENT, cursor="hand2")
+        self._ui_jira_link_label.pack(side="left", padx=(16, 0))
+
+        return frame
+
+    # ── UI Bug tab helpers ────────────────────────────────────────────────────
+
+    MAX_UI_SCREENSHOTS = 8
+
+    def _ui_capture_screenshot(self):
+        """Capture a screenshot from the active device and add it to the strip."""
+        if len(self._ui_screenshots) >= self.MAX_UI_SCREENSHOTS:
+            messagebox.showwarning(
+                "Max Screenshots Reached",
+                f"You can attach a maximum of {self.MAX_UI_SCREENSHOTS} screenshots per report.")
+            return
+
+        def task():
+            self.root.after(0, lambda: self._show_progress("Capturing screenshot…"))
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            path = f"/tmp/ui_screen_{ts}.png"
+            try:
+                self.adb.take_screenshot(path)
+                img = Image.open(path)
+                img.thumbnail((80, 80))
+                photo = ImageTk.PhotoImage(img)
+                self.root.after(0, lambda: self._ui_add_thumbnail(path, photo))
+                self.root.after(0, lambda: self.status_var.set("Screenshot captured"))
+            except Exception as e:
+                self.root.after(0, lambda: self.status_var.set(f"Screenshot error: {e}"))
+            finally:
+                self.root.after(0, self._hide_progress)
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _ui_add_thumbnail(self, path, photo):
+        """Add a thumbnail card to the screenshot strip."""
+        # Remove placeholder if first screenshot
+        if not self._ui_screenshots:
+            self._ui_no_ss_label.pack_forget()
+
+        idx = len(self._ui_screenshots)
+        self._ui_screenshots.append((path, photo))
+
+        # Thumbnail card
+        card = tk.Frame(self._ui_thumb_inner, bg=C_CARD_BG,
+            highlightbackground=C_BORDER, highlightthickness=1)
+        card.pack(side="left", padx=(0, 8), pady=4)
+
+        tk.Label(card, image=photo, bg=C_CARD_BG).pack()
+
+        bottom = tk.Frame(card, bg=C_CARD_BG)
+        bottom.pack(fill="x")
+
+        tk.Label(bottom, text=f"#{idx + 1}",
+            font=(FONT_FAMILY, FONT_SIZE_SM - 2),
+            bg=C_CARD_BG, fg=C_TEXT_SEC).pack(side="left", padx=4)
+
+        del_btn = tk.Label(bottom, text="✕",
+            font=(FONT_FAMILY, FONT_SIZE_SM - 1),
+            bg=C_CARD_BG, fg=C_DANGER, cursor="hand2")
+        del_btn.pack(side="right", padx=4)
+        del_btn.bind("<Button-1>", lambda e, i=idx: self._ui_remove_screenshot(i))
+
+        # Keep a reference so we can destroy it
+        self._ui_screenshots[idx] = (path, photo, card)
+
+        self._ui_ss_counter.configure(
+            text=f"{len(self._ui_screenshots)} / {self.MAX_UI_SCREENSHOTS}")
+
+    def _ui_remove_screenshot(self, idx):
+        """Remove a screenshot thumbnail from the strip."""
+        if idx >= len(self._ui_screenshots):
+            return
+        entry = self._ui_screenshots[idx]
+        card = entry[2] if len(entry) > 2 else None
+        if card:
+            card.destroy()
+        self._ui_screenshots.pop(idx)
+
+        if not self._ui_screenshots:
+            self._ui_no_ss_label.pack(pady=28)
+
+        self._ui_ss_counter.configure(
+            text=f"{len(self._ui_screenshots)} / {self.MAX_UI_SCREENSHOTS}")
+
+    def _ui_on_steps_mode_change(self):
+        """Show/hide the session start button based on the selected mode."""
+        if self._ui_steps_mode.get() == "session":
+            self._ui_session_btn.pack(side="left", padx=(10, 0))
+            self._ui_steps_text.configure(state="disabled", bg="#EFEFEF")
+        else:
+            self._ui_session_btn.pack_forget()
+            self._ui_session_status.configure(text="")
+            self._ui_steps_text.configure(state="normal", bg="#FAFAFA")
+
+    def _ui_toggle_steps_session(self):
+        """Start or stop the screen-recording session for auto-generating steps."""
+        if not self._ui_steps_session:
+            self._ui_start_steps_session()
+        else:
+            self._ui_stop_steps_session()
+
+    def _ui_start_steps_session(self):
+        """Begin recording the device screen to capture steps to reproduce."""
+        if not self.video_recorder:
+            messagebox.showwarning(
+                "Not Available",
+                "Video recorder is not initialised — cannot capture session.")
+            return
+        success = self.video_recorder.start_recording()
+        if not success:
+            self.status_var.set("Failed to start screen recording for steps")
+            return
+        self._ui_steps_session = True
+        self._ui_session_btn.configure(text="⏹  Stop")
+        self._ui_session_status.configure(
+            text="Recording…", fg=C_DANGER)
+        self.status_var.set("Recording session for Steps to Reproduce…")
+
+    def _ui_stop_steps_session(self):
+        """Stop recording — show the 'Generate AI assisted steps' button."""
+        self._ui_last_steps_video = self.video_recorder.stop_recording()
+        self._ui_steps_session = False
+        self._ui_session_btn.configure(text="▶  Start")
+        self._ui_session_status.configure(
+            text="Session recorded ✓", fg=C_SUCCESS)
+        # Show the deferred AI-generation button
+        self._ui_gen_steps_btn.pack(side="left", padx=(10, 0))
+        self.status_var.set("Session recorded — click ✨ to generate steps")
+
+    def _ui_generate_ai_steps(self):
+        """Generate Steps to Reproduce from the recorded session using Gemini."""
+        video_path = getattr(self, "_ui_last_steps_video", None)
+        self._ui_gen_steps_btn.configure(state="disabled")
+        self._ui_session_status.configure(text="Analysing…", fg=C_TEXT_SEC)
+        self.status_var.set("Generating AI assisted steps…")
+        self._show_progress("Generating steps…")
+
+        def task():
+            steps = "Unable to generate steps."
+            try:
+                if video_path and self.steps_generator:
+                    steps = self.steps_generator.generate_steps_from_video(
+                        video_path,
+                        crash_description="UI Bug session recording")
+                elif not video_path:
+                    steps = "No video recorded."
+                elif not self.steps_generator:
+                    steps = "StepsGenerator not configured."
+            except Exception as e:
+                steps = f"Steps generation failed: {e}"
+            self.root.after(0, lambda: self._ui_fill_steps(steps))
+            self.root.after(0, self._hide_progress)
+            self.root.after(0, lambda: self._ui_gen_steps_btn.configure(state="normal"))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _ui_fill_steps(self, steps_text):
+        """Populate the Steps to Reproduce field with generated text."""
+        self._ui_steps_text.configure(state="normal")
+        self._ui_steps_text.delete("1.0", "end")
+        self._ui_steps_text.insert("1.0", steps_text)
+        self._ui_steps_text.configure(
+            state="disabled" if self._ui_steps_mode.get() == "session" else "normal")
+        self._ui_session_status.configure(text="Steps generated ✓", fg=C_SUCCESS)
+        self.status_var.set("Steps to Reproduce generated successfully")
+
+    def _ui_submit_bug_report(self):
+        """Validate mandatory fields, submit the UI bug report, show Jira link."""
+        expected = self._ui_expected.get("1.0", "end").strip()
+        actual   = self._ui_actual.get("1.0", "end").strip()
+        steps    = self._ui_steps_text.get("1.0", "end").strip()
+        summary  = self._ui_summary_var.get().strip()
+
+        missing = []
+        if not expected:
+            missing.append("Expected Result")
+        if not actual:
+            missing.append("Actual Result")
+        if not steps:
+            missing.append("Steps to Reproduce")
+
+        if missing:
+            messagebox.showerror(
+                "Missing Required Fields",
+                "Please fill in the following mandatory fields:\n\n• "
+                + "\n• ".join(missing))
+            return
+
+        screenshot_count = len(self._ui_screenshots)
+        title = summary or f"[UI Bug] {self.package_var.get() or 'App'} — {actual[:60]}"
+        report = {
+            "type":         "UI Bug",
+            "summary":      title,
+            "expected":     expected,
+            "actual":       actual,
+            "steps":        steps,
+            "screenshots":  [s[0] for s in self._ui_screenshots],
+            "device":       self.device_combo.get(),
+            "app":          self.package_var.get(),
+            "platform":     getattr(self.adb, "platform", "android"),
+            "timestamp":    datetime.datetime.now().isoformat(),
+        }
+        print("[UIBugReport]", report)
+
+        self._show_progress("Filing Jira ticket…")
+
+        def task():
+            jira_url = None
+            jira_key = None
+            try:
+                if self.jira_client:
+                    description = (
+                        f"*Expected Result:*\n{expected}\n\n"
+                        f"*Actual Result:*\n{actual}\n\n"
+                        f"*Steps to Reproduce:*\n{steps}\n\n"
+                        f"*Device:* {report['device']}  |  "
+                        f"*App:* {report['app']}  |  "
+                        f"*Platform:* {report['platform']}\n"
+                        f"*Screenshots attached:* {screenshot_count}"
+                    )
+                    # JiraClient.create_bug() returns the issue key string (e.g. "PROJ-123")
+                    screenshot_paths = [s[0] for s in self._ui_screenshots]
+                    jira_key = self.jira_client.create_bug(
+                        summary=title,
+                        description=description,
+                        attachments=screenshot_paths if screenshot_paths else None
+                    )
+                    if jira_key:
+                        jira_url = (
+                            f"{self.jira_client.jira_url}/browse/{jira_key}"
+                        )
+            except Exception as e:
+                print(f"[Jira] Error filing ticket: {e}")
+            self.root.after(0, lambda: self._ui_after_submit(jira_url, jira_key,
+                                                             screenshot_count, title))
+            self.root.after(0, self._hide_progress)
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _ui_after_submit(self, jira_url, jira_key, screenshot_count, title):
+        """Show result after submission — display a clickable Jira link in the UI."""
+        if jira_url and jira_key:
+            link_text = f"🔗  {jira_key} — View in Jira"
+            self._ui_jira_link_label.configure(text=link_text, fg=C_ACCENT)
+            # Rebind each time so the URL is always current
+            self._ui_jira_link_label.bind(
+                "<Button-1>", lambda e: webbrowser.open(jira_url))
+            self.status_var.set(
+                f"Jira ticket created → {jira_key}  |  Click the link to open in browser")
+        else:
+            # No Jira configured or filing failed — plain success dialog
+            self._ui_jira_link_label.configure(text="", fg=C_MAIN_BG)
+            messagebox.showinfo(
+                "Bug Report Submitted",
+                f"✅ UI bug report submitted successfully!\n\n"
+                f"📸 Screenshots: {screenshot_count}\n"
+                f"📋 Summary: {title}")
+            self.status_var.set("UI bug report submitted")
+
+    def _ui_clear_form(self):
+        """Reset all fields and screenshots on the UI Bug tab."""
+        # Remove all thumbnails
+        for entry in list(self._ui_screenshots):
+            card = entry[2] if len(entry) > 2 else None
+            if card:
+                try:
+                    card.destroy()
+                except Exception:
+                    pass
+        self._ui_screenshots.clear()
+        self._ui_no_ss_label.pack(pady=28)
+        self._ui_ss_counter.configure(text="0 / 8")
+
+        # Clear text fields
+        self._ui_expected.delete("1.0", "end")
+        self._ui_actual.delete("1.0", "end")
+        self._ui_steps_text.configure(state="normal")
+        self._ui_steps_text.delete("1.0", "end")
+        self._ui_summary_var.set("")
+
+        # Reset steps mode + hide AI button + Jira link
+        self._ui_steps_mode.set("manual")
+        self._ui_on_steps_mode_change()
+        self._ui_session_status.configure(text="")
+        self._ui_gen_steps_btn.pack_forget()
+        self._ui_jira_link_label.configure(text="")
+        self._ui_last_steps_video = None
+
+        self.status_var.set("UI bug form cleared")
 
     # ─────────────────────────────────────────────────────────────────────────
     # Device / App selectors
