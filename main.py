@@ -38,12 +38,21 @@ def main():
     Config.validate()
 
     device_manager = _create_device_manager()
-    gemini         = GeminiClient(api_key=Config.GEMINI_API_KEY)
+    
+    if Config.LLM_PROVIDER == "bedrock":
+        from src.aws_bedrock_client import AwsBedrockClient
+        llm = AwsBedrockClient(
+            region_name=Config.AWS_REGION,
+            profile_name=Config.AWS_PROFILE
+        )
+    else:
+        llm = GeminiClient(api_key=Config.GEMINI_API_KEY)
+        
     secure         = SecureHandler(adb_manager=device_manager)
 
     recorder       = _create_recorder(device_manager)
-    log_analyzer   = LogAnalyzer(adb_manager=device_manager, gemini_client=gemini)
-    steps_gen      = StepsGenerator(gemini_client=gemini, video_recorder=recorder)
+    log_analyzer   = LogAnalyzer(adb_manager=device_manager, gemini_client=llm)
+    steps_gen      = StepsGenerator(gemini_client=llm, video_recorder=recorder)
 
     jira_client = None
     if Config.JIRA_URL:
@@ -56,7 +65,7 @@ def main():
 
     root = tk.Tk()
     app = SmartLoggerGUI(
-        root, device_manager, gemini, secure,
+        root, device_manager, llm, secure,
         recorder, log_analyzer, steps_gen, jira_client
     )
     root.mainloop()
